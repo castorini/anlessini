@@ -18,12 +18,7 @@ import org.apache.lucene.store.Lock;
 
 import java.io.InputStream;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class S3Directory extends Directory {
   private static final Logger LOG = LogManager.getLogger(S3Directory.class);
@@ -43,6 +38,7 @@ public class S3Directory extends Directory {
     s3Client = AmazonS3ClientBuilder.standard()
         .withRegion(Regions.US_EAST_1)
         .build();
+
   }
 
   public int getCacheThreshold() {
@@ -64,7 +60,6 @@ public class S3Directory extends Directory {
       list.add(objectSummary.getKey().split("/")[1]);
       lengths.put(objectSummary.getKey().split("/")[1], (int) objectSummary.getSize());
     }
-
     return list.toArray(new String[list.size()]);
   }
 
@@ -75,6 +70,11 @@ public class S3Directory extends Directory {
 
   @Override
   public long fileLength(String name) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public Set<String> getPendingDeletions() throws IOException {
     throw new UnsupportedOperationException();
   }
 
@@ -106,7 +106,7 @@ public class S3Directory extends Directory {
   @Override
   public IndexInput openInput(String name, IOContext context) throws IOException {
     if (lengths.get(name) < cacheThreshold) {
-      LOG.info("[openInput] " + name + ", size = " + lengths.get(name) + " - caching!");
+      // LOG.info("[openInput] " + name + ", size = " + lengths.get(name) + " - caching!");
       String fullName = key + "/" + name;
       S3Object object = s3Client.getObject(new GetObjectRequest(bucket, fullName));
       // hack around lack of readNBytes in Java 8

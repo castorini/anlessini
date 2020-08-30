@@ -31,6 +31,15 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
+// DynamoDB stuff
+import com.amazonaws.client.builder.AwsClientBuilder;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
+import com.amazonaws.services.dynamodbv2.document.DynamoDB;
+import com.amazonaws.services.dynamodbv2.document.Item;
+import com.amazonaws.services.dynamodbv2.document.Table;
+import com.amazonaws.services.dynamodbv2.document.spec.GetItemSpec;
+
 public class SearchDemo {
   public static Query buildQuery(String field, Analyzer analyzer, String queryText) {
     List<String> tokens = tokenize(analyzer, queryText);
@@ -73,10 +82,10 @@ public class SearchDemo {
     public String key = null;
 
     @Option(name = "-index", metaVar = "[index]", usage = "local index")
-    public String index = null;
+    public String index = "acl";
 
-    @Option(name = "-query", metaVar = "[query]", required = true, usage = "query")
-    public String query;
+    @Option(name = "-query", metaVar = "[query]", usage = "query")
+    public String query = "How is the weather";
 
     @Option(name = "-verbose", usage = "verbose")
     public boolean verbose = false;
@@ -155,6 +164,14 @@ public class SearchDemo {
     }
     if (searchArgs.trials > 0) {
       System.out.println("Average: " + sum / searchArgs.trials + " ms");
+    }
+
+    AmazonDynamoDB client = AmazonDynamoDBClientBuilder.standard().build();
+    DynamoDB dynamoDB = new DynamoDB(client);
+    Table table = dynamoDB.getTable("ACL");
+    for( String id: docids){
+      Item item = table.getItem("id", id);
+      System.out.println(item.toJSONPretty());
     }
   }
 }

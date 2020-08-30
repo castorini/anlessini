@@ -1,11 +1,17 @@
 package io.anlessini;
 
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
+import com.amazonaws.services.dynamodbv2.document.DynamoDB;
+import com.amazonaws.services.dynamodbv2.document.Item;
+import com.amazonaws.services.dynamodbv2.document.Table;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.LambdaLogger;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.anlessini.store.S3Directory;
+import org.apache.commons.logging.Log;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.en.EnglishAnalyzer;
 import org.apache.lucene.document.Document;
@@ -17,10 +23,10 @@ import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.similarities.BM25Similarity;
 import org.apache.lucene.search.similarities.Similarity;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.util.Map;
+
+import org.json.JSONObject;
 
 public class SearchLambda {
   private static final String INDEX_BUCKET = "INDEX_BUCKET";
@@ -34,17 +40,21 @@ public class SearchLambda {
 
   public void handleRequest(InputStream inputStream, OutputStream outputStream, Context context)
       throws IOException {
-    byte[] bytes = S3Directory.readNBytes(inputStream, Integer.MAX_VALUE);
-    Map<String, Object> jsonMap;
-    ObjectMapper mapper = new ObjectMapper();
-    String qstring;
 
-    if (bytes[0] == '{') {
-      jsonMap = mapper.readValue(bytes, Map.class);
-      qstring = (String) ((Map) jsonMap.get("queryStringParameters")).get("query");
-    } else {
-      qstring = new String(bytes);
+    BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+    StringBuilder sb = new StringBuilder();
+    String line;
+    while ((line = reader.readLine()) != null) {
+      sb.append(line);
     }
+    JSONObject json = new JSONObject(sb.toString());
+
+
+    ObjectMapper mapper = new ObjectMapper();
+    LambdaLogger logger = context.getLogger();
+
+    logger.log("Input: \n");
+    String qstring = json.getJSONObject("queryStringParameters").get("query").toString();
 
     String hits = search(qstring, context);
     outputStream.write(("{\"statusCode\": 200, \"headers\": { \"Access-Control-Allow-Origin\": \"*\" }," +
@@ -56,6 +66,11 @@ public class SearchLambda {
     logger.log("received : " + qstring + "\n");
 
     long startTime = System.currentTimeMillis();
+
+    // initializing the dynamodb instance
+    AmazonDynamoDB client = AmazonDynamoDBClientBuilder.standard().build();
+    DynamoDB dynamoDB = new DynamoDB(client);
+    Table table = dynamoDB.getTable("ACL");
 
     if (directory == null) {
       bucket = System.getenv(INDEX_BUCKET);
@@ -94,6 +109,9 @@ public class SearchLambda {
       childNode.put("docid", docids[i]);
       childNode.put("score", topDocs.scoreDocs[i].score);
 
+      // retreiving from dynamodb
+      Item item = table.getItem("id", docids[i]);
+      childNode.put("json_result", item.toJSONPretty());
       rootNode.add(childNode);
     }
     long endTime = System.currentTimeMillis();
