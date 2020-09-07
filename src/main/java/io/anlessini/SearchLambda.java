@@ -25,6 +25,7 @@ import org.apache.lucene.search.similarities.Similarity;
 
 import java.io.*;
 import java.util.Map;
+import java.util.UUID;
 
 import org.json.JSONObject;
 
@@ -39,7 +40,7 @@ public class SearchLambda {
   private String key;
 
   public void handleRequest(InputStream inputStream, OutputStream outputStream, Context context)
-      throws IOException {
+          throws IOException {
 
     BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
     StringBuilder sb = new StringBuilder();
@@ -58,7 +59,7 @@ public class SearchLambda {
 
     String hits = search(qstring, context);
     outputStream.write(("{\"statusCode\": 200, \"headers\": { \"Access-Control-Allow-Origin\": \"*\" }," +
-        "\"body\": " + mapper.writeValueAsString(hits) + "}").getBytes());
+            "\"body\": " + mapper.writeValueAsString(hits) + "}").getBytes());
   }
 
   public String search(String qstring, Context context) throws IOException {
@@ -102,21 +103,20 @@ public class SearchLambda {
     }
 
     ObjectMapper mapper = new ObjectMapper();
-    ArrayNode rootNode = mapper.createArrayNode();
-    for (int i = 0; i < topDocs.scoreDocs.length; i++) {
-      logger.log(docids[i] + " " + topDocs.scoreDocs[i].score + "\n");
-      ObjectNode childNode = mapper.createObjectNode();
-      childNode.put("docid", docids[i]);
-      childNode.put("score", topDocs.scoreDocs[i].score);
+    ObjectNode rootNode = mapper.createObjectNode();
+    rootNode.put("query_id", UUID.randomUUID().toString());
+    ArrayNode response = mapper.createArrayNode();
 
+    for (int i = 0; i < topDocs.scoreDocs.length; i++) {
       // retreiving from dynamodb
       Item item = table.getItem("id", docids[i]);
-      childNode.put("json_result", item.toJSONPretty());
-      rootNode.add(childNode);
+      response.add(item.toJSON());
     }
+    rootNode.set("response", response);
+    // System.out.println(mapper.writeValueAsString(rootNode));
+
     long endTime = System.currentTimeMillis();
     logger.log("Query latency: " + (endTime - startTime) + " ms" + "\n");
-
     return mapper.writeValueAsString(rootNode);
   }
 }

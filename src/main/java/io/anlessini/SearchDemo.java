@@ -1,5 +1,8 @@
 package io.anlessini;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.anlessini.store.S3Directory;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.config.Configurator;
@@ -30,6 +33,7 @@ import java.io.StringReader;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 // DynamoDB stuff
 import com.amazonaws.client.builder.AwsClientBuilder;
@@ -169,9 +173,20 @@ public class SearchDemo {
     AmazonDynamoDB client = AmazonDynamoDBClientBuilder.standard().build();
     DynamoDB dynamoDB = new DynamoDB(client);
     Table table = dynamoDB.getTable("ACL");
-    for( String id: docids){
-      Item item = table.getItem("id", id);
-      System.out.println(item.toJSONPretty());
+
+    ObjectMapper mapper = new ObjectMapper();
+    ObjectNode rootNode = mapper.createObjectNode();
+    rootNode.put("query_id", UUID.randomUUID().toString());
+    ArrayNode response = mapper.createArrayNode();
+    for (int i = 0; i < topDocs.scoreDocs.length; i++) {
+      // childNode.put("score", topDocs.scoreDocs[i].score);
+
+      // retreiving from dynamodb
+      Item item = table.getItem("id", docids[i]);
+      response.add(item.toJSON());
     }
+    rootNode.set("response", response);
+    System.out.println(mapper.writeValueAsString(rootNode));
+
   }
 }
