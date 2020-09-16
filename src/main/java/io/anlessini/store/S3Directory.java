@@ -74,14 +74,11 @@ public class S3Directory extends Directory {
   }
 
   @Override
-<<<<<<< HEAD
   public Set<String> getPendingDeletions() throws IOException {
     throw new UnsupportedOperationException();
   }
 
   @Override
-=======
->>>>>>> e1caf65f500b8f886fc83ffe2689b586d6199111
   public IndexOutput createOutput(String s, IOContext ioContext) throws IOException {
     throw new UnsupportedOperationException();
   }

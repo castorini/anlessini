@@ -86,17 +86,10 @@ public class SearchDemo {
     public String key = null;
 
     @Option(name = "-index", metaVar = "[index]", usage = "local index")
-<<<<<<< HEAD
     public String index = "acl";
 
     @Option(name = "-query", metaVar = "[query]", usage = "query")
     public String query = "How is the weather";
-=======
-    public String index = null;
-
-    @Option(name = "-query", metaVar = "[query]", required = true, usage = "query")
-    public String query;
->>>>>>> e1caf65f500b8f886fc83ffe2689b586d6199111
 
     @Option(name = "-verbose", usage = "verbose")
     public boolean verbose = false;
