@@ -51,13 +51,8 @@
         <artifactId>maven-compiler-plugin</artifactId>
         <version>3.8.1</version>
         <configuration>
-<<<<<<< HEAD
           <source>9</source>
           <target>9</target>
-=======
-          <source>8</source>
-          <target>8</target>
->>>>>>> e1caf65f500b8f886fc83ffe2689b586d6199111
           <testSource>8</testSource>
           <testTarget>8</testTarget>
           <showDeprecation>true</showDeprecation>
@@ -140,7 +135,6 @@
 
   <dependencies>
     <dependency>
-<<<<<<< HEAD
       <groupId>org.json</groupId>
       <artifactId>json</artifactId>
       <version>20200518</version>
@@ -161,19 +155,11 @@
       <groupId>com.amazonaws</groupId>
       <artifactId>aws-java-sdk-s3</artifactId>
       <version>1.11.848</version>
-=======
-      <groupId>com.amazonaws</groupId>
-      <artifactId>aws-java-sdk-s3</artifactId>
->>>>>>> e1caf65f500b8f886fc83ffe2689b586d6199111
     </dependency>
     <dependency>
       <groupId>com.amazonaws</groupId>
       <artifactId>aws-lambda-java-core</artifactId>
-<<<<<<< HEAD
       <version>1.2.1</version>
-=======
-      <version>1.2.0</version>
->>>>>>> e1caf65f500b8f886fc83ffe2689b586d6199111
     </dependency>
     <dependency>
       <groupId>org.apache.lucene</groupId>
