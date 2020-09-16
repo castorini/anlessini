@@ -20,6 +20,7 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.util.*;
 
+
 public class S3Directory extends Directory {
   private static final Logger LOG = LogManager.getLogger(S3Directory.class);
 
@@ -38,7 +39,6 @@ public class S3Directory extends Directory {
     s3Client = AmazonS3ClientBuilder.standard()
         .withRegion(Regions.US_EAST_1)
         .build();
-
   }
 
   public int getCacheThreshold() {
@@ -74,11 +74,14 @@ public class S3Directory extends Directory {
   }
 
   @Override
+<<<<<<< HEAD
   public Set<String> getPendingDeletions() throws IOException {
     throw new UnsupportedOperationException();
   }
 
   @Override
+=======
+>>>>>>> e1caf65f500b8f886fc83ffe2689b586d6199111
   public IndexOutput createOutput(String s, IOContext ioContext) throws IOException {
     throw new UnsupportedOperationException();
   }
@@ -106,7 +109,7 @@ public class S3Directory extends Directory {
   @Override
   public IndexInput openInput(String name, IOContext context) throws IOException {
     if (lengths.get(name) < cacheThreshold) {
-      // LOG.info("[openInput] " + name + ", size = " + lengths.get(name) + " - caching!");
+      LOG.info("[openInput] " + name + ", size = " + lengths.get(name) + " - caching!");
       String fullName = key + "/" + name;
       S3Object object = s3Client.getObject(new GetObjectRequest(bucket, fullName));
       // hack around lack of readNBytes in Java 8
