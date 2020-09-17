@@ -7,3 +7,4 @@ target/
 acl/
 target/
 .aws-sam/
+samconfig.toml
