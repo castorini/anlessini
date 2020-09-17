@@ -1,76 +1,82 @@
 package io.anlessini.store;
 
-import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.amazonaws.services.s3.model.GetObjectRequest;
-import com.amazonaws.services.s3.model.ListObjectsV2Request;
-import com.amazonaws.services.s3.model.ListObjectsV2Result;
-import com.amazonaws.services.s3.model.S3Object;
-import com.amazonaws.services.s3.model.S3ObjectSummary;
+import com.amazonaws.services.s3.model.*;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.IOContext;
-import org.apache.lucene.store.IndexInput;
-import org.apache.lucene.store.IndexOutput;
-import org.apache.lucene.store.Lock;
+import org.apache.lucene.store.*;
 
-import java.io.InputStream;
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
-
-public class S3Directory extends Directory {
+public class S3Directory extends BaseDirectory {
   private static final Logger LOG = LogManager.getLogger(S3Directory.class);
+  private static final int DEFAULT_CACHE_THRESHOLD = 1024*1024*512; // 512 MB
 
   private final AmazonS3 s3Client;
-  private final Map<String, Integer> lengths = new HashMap<>();
 
-  private String bucket;
-  private String key;
+  private Map<String, S3ObjectSummary> objectSummaries;
 
-  private int cacheThreshold = 1024*1024*512;
+  private final String bucket;
+  private final String key;
+  private final int cacheThreshold;
+
+  private final Lock lsLock = new ReentrantLock();
 
   public S3Directory(String bucket, String key) {
+    this(bucket, key, DEFAULT_CACHE_THRESHOLD);
+  }
+
+  public S3Directory(String bucket, String key, int cacheThreshold) {
+    super(new SingleInstanceLockFactory());
     this.bucket = bucket;
     this.key = key;
+    this.cacheThreshold = cacheThreshold;
 
-    s3Client = AmazonS3ClientBuilder.standard()
-        .withRegion(Regions.US_EAST_1)
-        .build();
-  }
-
-  public int getCacheThreshold() {
-    return cacheThreshold;
-  }
-
-  public void setCacheThreshold(int threshold) {
-    this.cacheThreshold = threshold;
+    s3Client = AmazonS3ClientBuilder.defaultClient();
+    LOG.info("Opened S3Directory under " + bucket + "/" + key);
   }
 
   @Override
-  public String[] listAll() throws IOException {
-    // https://github.com/awsdocs/aws-doc-sdk-examples/blob/master/java/example_code/s3/src/main/java/ListKeys.java
-    ListObjectsV2Request req = new ListObjectsV2Request().withBucketName(bucket).withMaxKeys(1024);
-    ListObjectsV2Result result = s3Client.listObjectsV2(req);
-
-    List<String> list = new ArrayList<>();
-    for (S3ObjectSummary objectSummary : result.getObjectSummaries()) {
-      list.add(objectSummary.getKey().split("/")[1]);
-      lengths.put(objectSummary.getKey().split("/")[1], (int) objectSummary.getSize());
+  public String[] listAll() {
+    lsLock.lock();
+    if (objectSummaries == null) { // only ls if has not already done so, otherwise use cached result
+      objectSummaries = new HashMap<>();
+      String listingCursor = null;
+      ListObjectsV2Result result;
+      do {
+        ListObjectsV2Request req = new ListObjectsV2Request()
+            .withBucketName(bucket)
+            .withPrefix(key + "/")
+            .withStartAfter(listingCursor);
+        result = s3Client.listObjectsV2(req);
+        List<S3ObjectSummary> listings = result.getObjectSummaries();
+        for (S3ObjectSummary objectSummary: listings) {
+          String objectKey = objectSummary.getKey();
+          String objectName = objectKey.split("/")[1];
+          objectSummaries.put(objectName, objectSummary);
+        }
+        listingCursor = listings.get(listings.size() - 1).getKey();
+      } while (result.isTruncated());
     }
-    return list.toArray(new String[list.size()]);
+    lsLock.unlock();
+
+    String[] result = objectSummaries.keySet().toArray(new String[objectSummaries.size()]);
+    Arrays.sort(result);
+    return result;
   }
 
   @Override
-  public void deleteFile(String s) throws IOException {
+  public void deleteFile(String s) {
     throw new UnsupportedOperationException();
   }
 
   @Override
-  public long fileLength(String name) throws IOException {
-    throw new UnsupportedOperationException();
+  public long fileLength(String name) {
+    return objectSummaries.get(name).getSize();
   }
 
   @Override
@@ -84,67 +90,59 @@ public class S3Directory extends Directory {
   }
 
   @Override
-  public IndexOutput createTempOutput(String s, String s1, IOContext ioContext) throws IOException {
+  public IndexOutput createTempOutput(String s, String s1, IOContext ioContext) {
     throw new UnsupportedOperationException();
   }
 
   @Override
-  public void sync(Collection<String> collection) throws IOException {
+  public void sync(Collection<String> collection) {
     throw new UnsupportedOperationException();
   }
 
   @Override
-  public void syncMetaData() throws IOException {
+  public void syncMetaData() {
     throw new UnsupportedOperationException();
   }
 
   @Override
-  public void rename(String s, String s1) throws IOException {
+  public void rename(String s, String s1) {
     throw new UnsupportedOperationException();
   }
 
   @Override
   public IndexInput openInput(String name, IOContext context) throws IOException {
-    if (lengths.get(name) < cacheThreshold) {
-      LOG.info("[openInput] " + name + ", size = " + lengths.get(name) + " - caching!");
+    if (fileLength(name) < cacheThreshold) {
+      LOG.info("[openInput] " + name + ", size = " + fileLength(name) + " - caching!");
       String fullName = key + "/" + name;
       S3Object object = s3Client.getObject(new GetObjectRequest(bucket, fullName));
-      // hack around lack of readNBytes in Java 8
-      byte[] data = readNBytes(object.getObjectContent(), Integer.MAX_VALUE);
+      byte[] data = object.getObjectContent().readAllBytes();
 
       object.close();
 
-      if (data.length != lengths.get(name)) {
+      if (data.length != fileLength(name)) {
         throw new IOException();
       }
 
       return new S3IndexInput(name, data);
     }
 
-    LOG.info("[openInput] " + name + ", size = " + lengths.get(name) + " - not caching!");
+    LOG.info("[openInput] " + name + ", size = " + fileLength(name) + " - not caching!");
     return new S3IndexInput(name);
   }
 
   @Override
-  public Lock obtainLock(String s) throws IOException {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void close() throws IOException {
+  public void close() {
+    s3Client.shutdown();
   }
 
   private class S3IndexInput extends IndexInput {
     private int pos = 0;
     private String name;
     private String fullName;
-    private byte[] data = null;
+    private byte[] data;
 
     protected S3IndexInput(String name) {
-      super(name);
-      this.name = name;
-      this.fullName = key + "/" + name;
-      LOG.trace("creating S3IndexInput on " + this.fullName);
+      this(name, null);
     }
 
     protected S3IndexInput(String name, byte[] data) {
@@ -172,7 +170,7 @@ public class S3Directory extends Directory {
 
     @Override
     public long length() {
-      return lengths.get(name);
+      return fileLength(name);
     }
 
     @Override
@@ -222,75 +220,5 @@ public class S3Directory extends Directory {
       System.arraycopy(buf, 0, b, offset, len);
       pos += len;
     }
-  }
-
-  // This is a hack around the fact that Java 8 is the only runtime available for AWS Java Lambdas.
-  // We get a NoSuchMethodError exception on com.amazonaws.services.s3.model.S3ObjectInputStream.readAllBytes()
-  // because InputStream only added readAllBytes and readNBytes in JDK 9.
-  // Thus, I copied this implementation:
-  // https://github.com/openjdk/jdk11u/blob/master/src/java.base/share/classes/java/io/InputStream.java
-
-  private static final int DEFAULT_BUFFER_SIZE = 8192;
-  private static final int MAX_BUFFER_SIZE = Integer.MAX_VALUE - 8;
-
-  public static byte[] readNBytes(InputStream in, int len) throws IOException {
-    if (len < 0) {
-      throw new IllegalArgumentException("len < 0");
-    }
-
-    List<byte[]> bufs = null;
-    byte[] result = null;
-    int total = 0;
-    int remaining = len;
-    int n;
-    do {
-      byte[] buf = new byte[Math.min(remaining, DEFAULT_BUFFER_SIZE)];
-      int nread = 0;
-
-      // read to EOF which may read more or less than buffer size
-      while ((n = in.read(buf, nread,
-          Math.min(buf.length - nread, remaining))) > 0) {
-        nread += n;
-        remaining -= n;
-      }
-
-      if (nread > 0) {
-        if (MAX_BUFFER_SIZE - total < nread) {
-          throw new OutOfMemoryError("Required array size too large");
-        }
-        total += nread;
-        if (result == null) {
-          result = buf;
-        } else {
-          if (bufs == null) {
-            bufs = new ArrayList<>();
-            bufs.add(result);
-          }
-          bufs.add(buf);
-        }
-      }
-      // if the last call to read returned -1 or the number of bytes
-      // requested have been read then break
-    } while (n >= 0 && remaining > 0);
-
-    if (bufs == null) {
-      if (result == null) {
-        return new byte[0];
-      }
-      return result.length == total ?
-          result : Arrays.copyOf(result, total);
-    }
-
-    result = new byte[total];
-    int offset = 0;
-    remaining = total;
-    for (byte[] b : bufs) {
-      int count = Math.min(b.length, remaining);
-      System.arraycopy(b, 0, result, offset, count);
-      offset += count;
-      remaining -= count;
-    }
-
-    return result;
   }
 }
