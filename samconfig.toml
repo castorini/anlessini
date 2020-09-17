@@ -1,0 +1,11 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "anlessini-SAM-test-policies"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-28i2nle56sxo"
+s3_prefix = "anlessini-SAM-test-policies"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+
