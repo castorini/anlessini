@@ -3,11 +3,12 @@ Insert ACL collection to DynamoDB as raw documents
 """
 
 import argparse
-import boto3
-import boto3.session
 import logging
 import concurrent.futures
 import time
+import threading
+import boto3
+import boto3.session
 from pyserini.search import SimpleSearcher
 
 logger = logging.getLogger(__name__)
@@ -62,18 +63,26 @@ def build_item_batches(searcher, batch_size):
     return batches
 
 
+thread_local = threading.local()
+
+
+def get_dynamo_client():
+    if not hasattr(thread_local, "dynamo_client"):
+        thread_local.session = boto3.session.Session()
+        thread_local.dynamo_client = thread_local.session.resource("dynamodb")
+    return thread_local.dynamo_client
+
+
 def batch_write_dynamo(table, items, max_retries=3):
-    session = boto3.session.Session()
-    client = session.resource("dynamodb")
     retries = 0
     failed_ids = []
     unprocessed_requests = [{"PutRequest": {"Item": item}} for item in items]
     while True:
-        batch_write_response = client.batch_write_item(RequestItems={table: unprocessed_requests})
+        batch_write_response = get_dynamo_client().batch_write_item(RequestItems={table: unprocessed_requests})
         unprocessed_requests = batch_write_response.get("UnprocessedItems", {}).get(table, [])
         failed_ids = [request["PutRequest"]["Item"]["id"] for request in unprocessed_requests]
         if unprocessed_requests and retries < max_retries:
-            logger.warn("Batch write failed for items %s, retrying in %s seconds", failed_ids, 2**retries)
+            logger.warning("Batch write failed for items %s, retrying in %s seconds", failed_ids, 2**retries)
             time.sleep(2**retries)
             retries += 1
         else:
@@ -86,7 +95,7 @@ def main():
     parser.add_argument("--index", required=True, type=str, help="Path to ACL Anthology Lucene index")
     parser.add_argument("--table", default="ACL", type=str, help="Dynamo table to insert the raw ACL documents to")
     parser.add_argument("--batch-size", dest="batch", default=MAX_BATCH_SIZE, help="The size of batch insert to Dynamo")
-    parser.add_argument("--threads", default=8, type=int, help="Number of threads for batch inserts")
+    parser.add_argument("--threads", default=5, type=int, help="Number of threads for batch inserts")
     parser.add_argument("--report-interval", dest="report_interval", default=500, type=int, help="Output progress interval")
     args = parser.parse_args()
 
