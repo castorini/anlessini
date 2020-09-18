@@ -4,6 +4,7 @@ Insert ACL collection to DynamoDB as raw documents
 
 import argparse
 import boto3
+import boto3.session
 import logging
 import concurrent.futures
 import time
@@ -56,11 +57,14 @@ def build_item_batches(searcher, batch_size):
         if len(curr_batch) >= batch_size:
             batches.append(curr_batch)
             curr_batch = []
-    batches.append(curr_batch)  # append the last small batch
+    if curr_batch:  # append the last small batch
+        batches.append(curr_batch)
     return batches
 
 
-def batch_write_dynamo(client, table, items, max_retries=3):
+def batch_write_dynamo(table, items, max_retries=3):
+    session = boto3.session.Session()
+    client = session.resource("dynamodb")
     retries = 0
     failed_ids = []
     unprocessed_requests = [{"PutRequest": {"Item": item}} for item in items]
@@ -86,7 +90,6 @@ def main():
     parser.add_argument("--report-interval", dest="report_interval", default=500, type=int, help="Output progress interval")
     args = parser.parse_args()
 
-    client = boto3.resource("dynamodb")
     # TODO: use https://github.com/castorini/pyserini/blob/master/docs/usage-collection.md once AclAnthology support is added
     searcher = SimpleSearcher(args.index)
 
@@ -94,7 +97,7 @@ def main():
     next_report_threshold = args.report_interval
     batches = build_item_batches(searcher, args.batch)
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.batch) as executor:
-        futures = {executor.submit(batch_write_dynamo, client, args.table, batch): batch for batch in batches}
+        futures = {executor.submit(batch_write_dynamo, args.table, batch): batch for batch in batches}
         for future in concurrent.futures.as_completed(futures):
             batch = futures[future]
             try:
