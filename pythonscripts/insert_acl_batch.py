@@ -112,10 +112,10 @@ def main():
             try:
                 failed_docids = future.result()
                 if failed_docids:
-                    logger.error("Error writing batches %s" % failed_docids, e)
-            except Exception as e:
+                    logger.error("Error writing batches %s" % failed_docids)
+            except Exception:
                 batch_ids = [item["id"] for item in batch]
-                logger.error("Error writing batches %s" % batch_ids, e)
+                logger.exception("Error writing batches %s" % batch_ids)
             finally:
                 progress += len(batch)
                 if progress > next_report_threshold:
