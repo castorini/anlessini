@@ -11,6 +11,16 @@ Globals:
     Timeout: 30
 
 Resources:
+  AnlessiniApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      MethodSettings:
+        - ResourcePath: /search
+          HttpMethod: GET
+          ThrottlingBurstLimit: 2
+          ThrottlingRateLimit: 2
+
   SearchLambdaFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
@@ -27,10 +37,12 @@ Resources:
         Variables:
           INDEX_BUCKET: acl-lucene-index
           INDEX_KEY: acl
+          TABLE_NAME: ACL
       Events:
         AnlessiniSearch:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
+            RestApiId: !Ref AnlessiniApi
             Path: /search
             Method: get
 
@@ -38,9 +50,9 @@ Outputs:
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
   # Find out more about other implicit resources you can reference within SAM
   # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
-  AnlessiniAPI:
+  AnlessiniApiUrl:
     Description: "API Gateway endpoint URL for Prod stage for search lambda function"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/search/"
+    Value: !Sub "https://${AnlessiniApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/search/"
   SearchLambdaFunction:
     Description: "Lambda Function ARN"
     Value: !GetAtt SearchLambdaFunction.Arn
