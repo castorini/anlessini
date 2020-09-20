@@ -27,6 +27,7 @@
 
   <properties>
     <lucene.version>8.3.0</lucene.version>
+    <amazon.aws.sdk.version>1.11.848</amazon.aws.sdk.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 
@@ -51,10 +52,10 @@
         <artifactId>maven-compiler-plugin</artifactId>
         <version>3.8.1</version>
         <configuration>
-          <source>9</source>
-          <target>9</target>
-          <testSource>8</testSource>
-          <testTarget>8</testTarget>
+          <source>11</source>
+          <target>11</target>
+          <testSource>11</testSource>
+          <testTarget>11</testTarget>
           <showDeprecation>true</showDeprecation>
           <compilerArgument>-Xlint:unchecked</compilerArgument>
         </configuration>
@@ -126,7 +127,7 @@
       <dependency>
         <groupId>com.amazonaws</groupId>
         <artifactId>aws-java-sdk-bom</artifactId>
-        <version>1.11.543</version>
+        <version>${amazon.aws.sdk.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -135,31 +136,29 @@
 
   <dependencies>
     <dependency>
-      <groupId>org.json</groupId>
-      <artifactId>json</artifactId>
-      <version>20200518</version>
-    </dependency>
-    <dependency>
       <groupId>com.amazonaws</groupId>
       <artifactId>aws-java-sdk-dynamodb</artifactId>
-      <version>1.11.847</version>
+      <version>${amazon.aws.sdk.version}</version>
     </dependency>
-
     <dependency>
       <groupId>com.amazonaws</groupId>
       <artifactId>aws-java-sdk-core</artifactId>
-      <version>1.11.848</version>
+      <version>${amazon.aws.sdk.version}</version>
     </dependency>
-
     <dependency>
       <groupId>com.amazonaws</groupId>
       <artifactId>aws-java-sdk-s3</artifactId>
-      <version>1.11.848</version>
+      <version>${amazon.aws.sdk.version}</version>
     </dependency>
     <dependency>
       <groupId>com.amazonaws</groupId>
       <artifactId>aws-lambda-java-core</artifactId>
       <version>1.2.1</version>
+    </dependency>
+    <dependency>
+      <groupId>com.amazonaws</groupId>
+      <artifactId>aws-lambda-java-events</artifactId>
+      <version>3.1.0</version>
     </dependency>
     <dependency>
       <groupId>org.apache.lucene</groupId>
@@ -185,5 +184,6 @@
       <groupId>org.apache.logging.log4j</groupId>
       <artifactId>log4j-core</artifactId>
       <version>2.12.0</version>
-    </dependency>  </dependencies>
+    </dependency>
+  </dependencies>
 </project>
