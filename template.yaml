@@ -10,6 +10,11 @@ Globals:
   Function:
     Timeout: 30
 
+Parameters:
+  SearchLambdaFunctionCodeUri:
+    Type: String
+    Default: search-lambda-function/target/search-lambda-function-0.1.0-SNAPSHOT-fatjar.jar
+
 Resources:
   AnlessiniApi:
     Type: AWS::Serverless::Api
@@ -24,7 +29,7 @@ Resources:
   SearchLambdaFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
-      CodeUri: SearchLambdaFunction
+      CodeUri: !Sub ${SearchLambdaFunctionCodeUri}
       Handler: io.anlessini.SearchLambda::handleRequest
       Runtime: java11
       MemorySize: 3008
@@ -35,7 +40,7 @@ Resources:
             TableName: '*'
       Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
         Variables:
-          INDEX_BUCKET: acl-lucene-index
+          INDEX_BUCKET: adamyy-anlessini
           INDEX_KEY: acl
           TABLE_NAME: ACL
       Events:
