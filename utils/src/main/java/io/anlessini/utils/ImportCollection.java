@@ -107,7 +107,7 @@ public class ImportCollection {
     public AtomicLong errors = new AtomicLong();
   }
 
-  private class DynamoClientFactory extends BasePooledObjectFactory<AmazonDynamoDB> {
+  private static class DynamoClientFactory extends BasePooledObjectFactory<AmazonDynamoDB> {
     @Override
     public AmazonDynamoDB create() {
       return AmazonDynamoDBClientBuilder.defaultClient();
