@@ -27,7 +27,7 @@ import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.similarities.BM25Similarity;
 import org.apache.lucene.search.similarities.Similarity;
 
-import java.io.IOException;
+import java.io.*;
 import java.util.Map;
 import java.util.UUID;
 
