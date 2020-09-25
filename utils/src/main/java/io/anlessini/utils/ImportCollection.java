@@ -69,18 +69,6 @@ public class ImportCollection {
     @Option(name = "-dynamo.batchSize", metaVar = "[num]",
         usage = "Batch size of the BatchWriteItem operation, capped at 25")
     public int dynamoBatchSize = 25;
-
-    @Option(name = "-dynamo.provisioned", metaVar = "",
-        usage = "Set DynamoDB table's billing mode to provisioned, which is by default on-demand.")
-    public boolean dynamoProvisioned;
-
-    @Option(name = "-dynamo.capacity.read", metaVar = "[num]",
-        usage = "Set DynamoDB table's provisioned read capacity.")
-    public long dynamoReadCapacityUnit = 5;
-
-    @Option(name = "-dynamo.capacity.write", metaVar = "[num]",
-        usage = "Set DynamoDB table's provisioned write capacity.")
-    public long dynamoWriteCapacityUnit = 5;
   }
 
   private final ImportArgs args;
@@ -169,38 +157,6 @@ public class ImportCollection {
     final List segmentPaths = collection.getSegmentPaths();
     final int segmentCnt = segmentPaths.size();
     LOG.info(String.format("%,d %s found", segmentCnt, (segmentCnt == 1 ? "file" : "files" )));
-
-//    LOG.info("Creating DynamoDB table " + args.dynamoTable);
-//    AmazonDynamoDB dynamoDB = null;
-//    try {
-//      dynamoDB = dynamoPool.borrowObject();
-//      CreateTableRequest createTableRequest = new CreateTableRequest()
-//          .withTableName(args.dynamoTable)
-//          .withKeySchema(new KeySchemaElement().withKeyType(KeyType.HASH).withAttributeName(IndexArgs.ID))
-//          .withAttributeDefinitions(new AttributeDefinition(IndexArgs.ID, ScalarAttributeType.S));
-//      if (args.dynamoProvisioned) {
-//        createTableRequest = createTableRequest
-//            .withBillingMode(BillingMode.PROVISIONED)
-//            .withProvisionedThroughput(new ProvisionedThroughput(args.dynamoReadCapacityUnit, args.dynamoWriteCapacityUnit));
-//      } else {
-//        createTableRequest = createTableRequest
-//            .withBillingMode(BillingMode.PAY_PER_REQUEST);
-//      }
-//      CreateTableResult createTableResult = dynamoDB.createTable(createTableRequest);
-//      LOG.info("Created DynamoDB table " + args.dynamoTable + ", table description: ");
-//      LOG.info(createTableResult.getTableDescription().toString());
-//    } catch (ResourceInUseException e) {
-//      throw new RuntimeException("Error occurred when creating table " + args.dynamoTable + ". ImportCollection can " +
-//          "only import data into new DynamoDB tables, please avoid using existing table names.", e);
-//    } catch (Exception e) {
-//      throw new RuntimeException("Error occurred when creating table " + args.dynamoTable, e);
-//    } finally {
-//      try {
-//        dynamoPool.returnObject(dynamoDB);
-//      } catch (Exception e) {
-//        LOG.error("Error returning DynamoDB client to pool", e);
-//      }
-//    }
 
     LOG.info("Starting to import...");
     for (int i = 0; i < segmentCnt; i++) {
