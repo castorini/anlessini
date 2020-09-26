@@ -35,7 +35,7 @@ Resources:
             TableName: '*'
       Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
         Variables:
-          INDEX_BUCKET: adamyy-anlessini
+          INDEX_BUCKET: acl-lucene-index
           INDEX_KEY: acl
           TABLE_NAME: ACL
       Events:
