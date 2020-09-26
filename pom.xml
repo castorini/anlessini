@@ -6,6 +6,12 @@
   <name>Anlessini</name>
   <description>Serverless Anserini</description>
   <url>http://anserini.io/</url>
+  <packaging>pom</packaging>
+
+  <modules>
+    <module>utils</module>
+    <module>search-lambda-function</module>
+  </modules>
 
   <licenses>
     <license>
@@ -28,6 +34,7 @@
   <properties>
     <lucene.version>8.3.0</lucene.version>
     <amazon.aws.sdk.version>1.11.848</amazon.aws.sdk.version>
+    <anserini.version>0.9.4</anserini.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 
@@ -58,20 +65,6 @@
           <testTarget>11</testTarget>
           <showDeprecation>true</showDeprecation>
           <compilerArgument>-Xlint:unchecked</compilerArgument>
-        </configuration>
-      </plugin>
-      <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>appassembler-maven-plugin</artifactId>
-        <version>2.0.0</version>
-        <configuration>
-          <extraJvmArguments>-Xms512M -Xmx31G</extraJvmArguments>
-          <programs>
-            <program>
-              <mainClass>io.anlessini.SearchDemo</mainClass>
-              <id>SearchDemo</id>
-            </program>
-          </programs>
         </configuration>
       </plugin>
       <plugin>
@@ -138,17 +131,14 @@
     <dependency>
       <groupId>com.amazonaws</groupId>
       <artifactId>aws-java-sdk-dynamodb</artifactId>
-      <version>${amazon.aws.sdk.version}</version>
     </dependency>
     <dependency>
       <groupId>com.amazonaws</groupId>
       <artifactId>aws-java-sdk-core</artifactId>
-      <version>${amazon.aws.sdk.version}</version>
     </dependency>
     <dependency>
       <groupId>com.amazonaws</groupId>
       <artifactId>aws-java-sdk-s3</artifactId>
-      <version>${amazon.aws.sdk.version}</version>
     </dependency>
     <dependency>
       <groupId>com.amazonaws</groupId>
@@ -184,6 +174,11 @@
       <groupId>org.apache.logging.log4j</groupId>
       <artifactId>log4j-core</artifactId>
       <version>2.12.0</version>
+    </dependency>
+    <dependency>
+      <groupId>io.anserini</groupId>
+      <artifactId>anserini</artifactId>
+      <version>${anserini.version}</version>
     </dependency>
   </dependencies>
 </project>
