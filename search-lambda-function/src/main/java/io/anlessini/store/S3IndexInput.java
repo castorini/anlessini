@@ -57,7 +57,7 @@ public class S3IndexInput extends BufferedIndexInput {
 
   @Override
   public void close() throws IOException {
-
+    // no-op
   }
 
   @Override
