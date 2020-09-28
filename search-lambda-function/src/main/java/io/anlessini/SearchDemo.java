@@ -129,7 +129,7 @@ public class SearchDemo {
       reader = DirectoryReader.open(FSDirectory.open(Paths.get(searchArgs.index)));
     } else {
       System.out.println("Searching S3 index...");
-      S3Directory directory = new S3Directory(searchArgs.bucket, searchArgs.key, searchArgs.cacheThreshold);
+      S3Directory directory = new S3Directory(searchArgs.bucket, searchArgs.key);
       reader = DirectoryReader.open(directory);
     }
 

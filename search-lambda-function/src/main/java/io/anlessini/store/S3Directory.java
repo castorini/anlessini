@@ -104,7 +104,7 @@ public class S3Directory extends BaseDirectory {
 
   @Override
   public IndexInput openInput(String name, IOContext context) throws IOException {
-    return new S3IndexInput(s3Client, objectSummaries.get(name), context);
+    return new S3IndexInput(s3Client, objectSummaries.get(name));
   }
 
   @Override
