@@ -52,3 +52,16 @@ The generated lucene indexes will be stored in the `indexes/acl/` directory.
 Create a new S3 bucket called `acl-indexes`, and within it create a folder called
 `acl`, navigate to the folder and upload the files in `indexes/acl/` into it.
 
+Create a new DynamoDB table named `ACL`. And now navigate into the Anlessini root
+folder, and run the following commands
+```bash
+$ utils/target/appassembler/bin/ImportCollection \
+    -collection AclAnthology -generator AclAnthologyGenerator \
+    -dynamo.table ACL -threads 8 \
+    -input /path/to/acl.anthology.data
+```
+The above operation may take a long time to run, but once finished the `ACL` 
+table should be populated.
+
+### Deploying Serverless Stack
+
