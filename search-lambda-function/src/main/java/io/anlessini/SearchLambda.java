@@ -107,17 +107,12 @@ public class SearchLambda implements RequestHandler<APIGatewayProxyRequestEvent,
     ObjectNode rootNode = objectMapper.createObjectNode();
     rootNode.put("query_id", UUID.randomUUID().toString());
     ArrayNode response = objectMapper.createArrayNode();
-    for (int i = 0; i < topDocs.scoreDocs.length; i++) {
-      response.add(objectMapper.writeValueAsString(Map.of(
-          docids[i], topDocs.scoreDocs[i].score
-      )));
-    }
 
-//    for (int i = 0; i < topDocs.scoreDocs.length; i++) {
-//      // retreiving from dynamodb
-//      Item item = dynamoTable.getItem("id", docids[i]);
-//      response.add(item.toJSON());
-//    }
+    for (int i = 0; i < topDocs.scoreDocs.length; i++) {
+      // retreiving from dynamodb
+      Item item = dynamoTable.getItem("id", docids[i]);
+      response.add(item.toJSON());
+    }
     rootNode.set("response", response);
     // System.out.println(mapper.writeValueAsString(rootNode));
 
