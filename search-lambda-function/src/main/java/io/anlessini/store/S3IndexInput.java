@@ -43,7 +43,7 @@ public class S3IndexInput extends BufferedIndexInput {
     this.objectSummary = objectSummary;
     this.off = offset;
     this.end = offset + length;
-    LOG.info("Opened S3IndexInput " + toString() + " , bufferSize=" + getBufferSize() + ", this=" + hashCode());
+    LOG.info("Opened S3IndexInput " + toString() + "@" + hashCode() + " , bufferSize=" + getBufferSize());
   }
 
   private static int defaultBufferSize(long fileLength) {
@@ -73,9 +73,16 @@ public class S3IndexInput extends BufferedIndexInput {
   public IndexInput slice(String sliceDescription, long offset, long length) throws IOException {
     if (offset < 0 || length < 0 || offset + length > this.length()) {
       throw new IllegalArgumentException("Slice " + sliceDescription + " out of bounds: " +
-          "offset=" + offset + ",length=" + length + ",fileLength="  + this.length() + ": "  + toString());
+          "offset=" + offset + ",length=" + length + ",fileLength=" + this.length() + ": " + toString());
     }
+    LOG.info("[slice][" + toString() + "@" + hashCode() + "] " + sliceDescription + ", offset=" + offset + ", length=" + length + ", fileLength=" + this.length());
     return new S3IndexInput(s3Client, objectSummary, off + offset, length, defaultBufferSize(length));
+  }
+
+  @Override
+  public BufferedIndexInput clone() {
+    LOG.info("[clone][" + toString() + "@" + hashCode() + "]");
+    return super.clone();
   }
 
   @Override
@@ -119,7 +126,7 @@ public class S3IndexInput extends BufferedIndexInput {
   }
 
   protected int readFromS3(ByteBuffer b, long offset, int length) throws IOException {
-    LOG.info("[readingFromS3][" + toString() + "] offset=" + offset + " length=" + length + ", this=" + hashCode());
+    LOG.info("[readingFromS3][" + toString() + "@" + hashCode() + "] offset=" + offset + " length=" + length);
     GetObjectRequest rangeObjectRequest = new GetObjectRequest(objectSummary.getBucketName(), objectSummary.getKey())
         .withRange(offset, offset + length - 1);
     S3Object object = s3Client.getObject(rangeObjectRequest);

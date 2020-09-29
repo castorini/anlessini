@@ -1,7 +1,6 @@
 package io.anlessini.store;
 
 import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.*;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -24,12 +23,12 @@ public class S3Directory extends BaseDirectory {
 
   private final Lock lsLock = new ReentrantLock();
 
-  public S3Directory(String bucket, String key) {
+  public S3Directory(AmazonS3 s3Client, String bucket, String key) {
     super(new SingleInstanceLockFactory());
+    this.s3Client = s3Client;
     this.bucket = bucket;
     this.key = key;
 
-    s3Client = AmazonS3ClientBuilder.defaultClient();
     LOG.info("Opened S3Directory under " + bucket + "/" + key);
   }
 

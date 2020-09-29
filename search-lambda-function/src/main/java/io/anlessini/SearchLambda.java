@@ -8,6 +8,8 @@ import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
@@ -43,11 +45,14 @@ public class SearchLambda implements RequestHandler<APIGatewayProxyRequestEvent,
   private final String DYNAMODB_TABLE_NAME = System.getenv("TABLE_NAME");
   private final Table dynamoTable;
 
+  private final AmazonS3 s3Client;
+
   private static final ObjectMapper objectMapper = new ObjectMapper();
   private static final ObjectWriter writer = objectMapper.writer();
 
   public SearchLambda() throws IOException {
-    directory = new S3Directory(S3_INDEX_BUCKET, S3_INDEX_KEY);
+    s3Client = AmazonS3ClientBuilder.defaultClient();
+    directory = new S3Directory(s3Client, S3_INDEX_BUCKET, S3_INDEX_KEY);
     reader = DirectoryReader.open(directory);
 
     // initializing the dynamodb instance

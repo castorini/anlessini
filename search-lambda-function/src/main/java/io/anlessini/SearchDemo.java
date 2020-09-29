@@ -1,5 +1,7 @@
 package io.anlessini;
 
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -129,7 +131,8 @@ public class SearchDemo {
       reader = DirectoryReader.open(FSDirectory.open(Paths.get(searchArgs.index)));
     } else {
       System.out.println("Searching S3 index...");
-      S3Directory directory = new S3Directory(searchArgs.bucket, searchArgs.key);
+      AmazonS3 s3Client = AmazonS3ClientBuilder.defaultClient();
+      S3Directory directory = new S3Directory(s3Client, searchArgs.bucket, searchArgs.key);
       reader = DirectoryReader.open(directory);
     }
 
