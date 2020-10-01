@@ -75,7 +75,8 @@ public class SearchLambda implements RequestHandler<APIGatewayProxyRequestEvent,
     }
 
     response.setHeaders(Map.of(
-        "Content-Type", "application/json"
+        "Content-Type", "application/json",
+        "Access-Control-Allow-Origin", "*"
     ));
     return response;
   }
