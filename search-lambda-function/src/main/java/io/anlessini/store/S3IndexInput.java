@@ -8,7 +8,6 @@ import org.apache.commons.io.IOUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.lucene.store.BufferedIndexInput;
-import org.apache.lucene.store.IndexInput;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -70,7 +69,7 @@ public class S3IndexInput extends BufferedIndexInput {
   }
 
   @Override
-  public IndexInput slice(String sliceDescription, long offset, long length) throws IOException {
+  public S3IndexInput slice(String sliceDescription, long offset, long length) throws IOException {
     if (offset < 0 || length < 0 || offset + length > this.length()) {
       throw new IllegalArgumentException("Slice " + sliceDescription + " out of bounds: " +
           "offset=" + offset + ",length=" + length + ",fileLength=" + this.length() + ": " + toString());
@@ -80,9 +79,10 @@ public class S3IndexInput extends BufferedIndexInput {
   }
 
   @Override
-  public BufferedIndexInput clone() {
-    LOG.info("[clone][" + toString() + "@" + hashCode() + "]");
-    return super.clone();
+  public S3IndexInput clone() {
+    S3IndexInput clone = (S3IndexInput) super.clone();
+    LOG.info("[clone][" + toString() + "@" + hashCode() + "], clone=" + clone.hashCode());
+    return clone;
   }
 
   @Override
