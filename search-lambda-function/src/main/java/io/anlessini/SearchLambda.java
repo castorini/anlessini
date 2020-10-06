@@ -30,6 +30,7 @@ import org.apache.lucene.search.similarities.BM25Similarity;
 import org.apache.lucene.search.similarities.Similarity;
 
 import java.io.*;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
 
@@ -108,6 +109,8 @@ public class SearchLambda implements RequestHandler<APIGatewayProxyRequestEvent,
       String docid = doc.getField("id").stringValue();
       docids[i] = docid;
     }
+
+    LOG.info("Docids: " + Arrays.toString(docids));
 
     ObjectNode rootNode = objectMapper.createObjectNode();
     rootNode.put("query_id", UUID.randomUUID().toString());

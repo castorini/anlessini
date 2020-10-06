@@ -1,10 +1,7 @@
 package io.anlessini.store;
 
 import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.model.GetObjectRequest;
-import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
-import org.apache.commons.io.IOUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.lucene.store.BufferedIndexInput;
@@ -12,14 +9,13 @@ import org.apache.lucene.store.BufferedIndexInput;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.Channels;
-import java.nio.channels.ReadableByteChannel;
 
 public class S3IndexInput extends BufferedIndexInput {
   private static final Logger LOG = LogManager.getLogger(S3IndexInput.class);
-  private static final int CHUNK_SIZE = 1024 * 1024 * 64; // 64 MB
+  private static final int DEFAULT_BUFFER_SIZE = 1024 * 1024 * 4; // 4 MB
 
   private final AmazonS3 s3Client;
+  private final S3CachedReader reader;
   private final S3ObjectSummary objectSummary;
   private ByteBuffer bytebuf;
 
@@ -39,6 +35,7 @@ public class S3IndexInput extends BufferedIndexInput {
   public S3IndexInput(AmazonS3 s3Client, S3ObjectSummary objectSummary, long offset, long length, int bufferSize) {
     super(objectSummary.getBucketName() + "/" + objectSummary.getKey(), bufferSize);
     this.s3Client = s3Client;
+    this.reader = new S3CachedReader(s3Client);
     this.objectSummary = objectSummary;
     this.off = offset;
     this.end = offset + length;
@@ -48,7 +45,7 @@ public class S3IndexInput extends BufferedIndexInput {
   private static int defaultBufferSize(long fileLength) {
     long bufferSize = fileLength;
     bufferSize = Math.max(bufferSize, MIN_BUFFER_SIZE);
-    bufferSize = Math.min(bufferSize, CHUNK_SIZE);
+    bufferSize = Math.min(bufferSize, DEFAULT_BUFFER_SIZE);
     return Math.toIntExact(bufferSize);
   }
 
@@ -74,7 +71,7 @@ public class S3IndexInput extends BufferedIndexInput {
       throw new IllegalArgumentException("Slice " + sliceDescription + " out of bounds: " +
           "offset=" + offset + ",length=" + length + ",fileLength=" + this.length() + ": " + toString());
     }
-    LOG.info("[slice][" + toString() + "@" + hashCode() + "] " + sliceDescription + ", offset=" + offset + ", length=" + length + ", fileLength=" + this.length());
+    LOG.info("[slice][" + toString() + "@" + hashCode() + "] " + getFullSliceDescription(sliceDescription) + ", offset=" + offset + ", length=" + length + ", fileLength=" + this.length());
     return new S3IndexInput(s3Client, objectSummary, off + offset, length, defaultBufferSize(length));
   }
 
@@ -107,10 +104,10 @@ public class S3IndexInput extends BufferedIndexInput {
       try {
         int readLength = length;
         while (readLength > 0) {
-          final int toRead = Math.min(CHUNK_SIZE, readLength);
+          final int toRead = Math.min(DEFAULT_BUFFER_SIZE, readLength);
           bb.limit(bb.position() + toRead);
           assert bb.remaining() == toRead;
-          final int bytesRead = readFromS3(bb, pos, toRead);
+          final int bytesRead = reader.read(objectSummary, bb, pos, toRead);
           if (bytesRead < 0) {
             throw new EOFException("Read past EOF: " + toString() + "@" + hashCode() + " off=" + offset + " len=" + length + " pos=" + pos + " chunk=" + toRead + " end=" + end);
           }
@@ -123,17 +120,6 @@ public class S3IndexInput extends BufferedIndexInput {
         throw new IOException(ioe.getMessage() + ": " + toString() + "@" + hashCode(), ioe);
       }
     }
-  }
-
-  protected int readFromS3(ByteBuffer b, long offset, int length) throws IOException {
-    LOG.info("[readingFromS3][" + toString() + "@" + hashCode() + "] offset=" + offset + " length=" + length);
-    GetObjectRequest rangeObjectRequest = new GetObjectRequest(objectSummary.getBucketName(), objectSummary.getKey())
-        .withRange(offset, offset + length - 1);
-    S3Object object = s3Client.getObject(rangeObjectRequest);
-    ReadableByteChannel objectContentChannel = Channels.newChannel(object.getObjectContent());
-    int bytesRead = IOUtils.read(objectContentChannel, b);
-    object.close();
-    return bytesRead;
   }
 
   @Override
