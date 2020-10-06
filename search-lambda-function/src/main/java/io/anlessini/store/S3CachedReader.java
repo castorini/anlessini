@@ -55,6 +55,7 @@ public class S3CachedReader {
       int downloadLength = Math.toIntExact(downloadEndOffset - downloadStartOffset);
       List<S3FileBlock> downloadBlocks = S3FileBlock.of(summary, downloadStartOffset, downloadLength);
 
+      LOG.info("[readFromS3] " + summary + " @" + downloadStartOffset + ":" + downloadLength);
       GetObjectRequest rangeObjectRequest = new GetObjectRequest(summary.getBucketName(), summary.getKey())
           .withRange(downloadStartOffset, downloadEndOffset - 1);
       S3Object object = s3Client.getObject(rangeObjectRequest);

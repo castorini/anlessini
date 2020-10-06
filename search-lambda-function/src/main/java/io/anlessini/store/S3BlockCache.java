@@ -19,7 +19,7 @@ public class S3BlockCache {
    */
   static final int MIN_EVICTABLE_SIZE = 1024 * 1024 * 32;
   /**
-   * The eviction threshold, if we exceed 1792 MB in heap size we run eviction thread
+   * The eviction threshold, if we exceed 1792 MB in heap size we run eviction
    */
   static final long MAX_HEAP_SIZE = 1024 * 1024 * 1792;
 
