@@ -39,7 +39,7 @@ public class S3IndexInput extends BufferedIndexInput {
     this.objectSummary = objectSummary;
     this.off = offset;
     this.end = offset + length;
-    LOG.info("Opened S3IndexInput " + toString() + "@" + hashCode() + " , bufferSize=" + getBufferSize());
+    LOG.trace("Opened S3IndexInput " + toString() + "@" + hashCode() + " , bufferSize=" + getBufferSize());
   }
 
   private static int defaultBufferSize(long fileLength) {
@@ -71,14 +71,14 @@ public class S3IndexInput extends BufferedIndexInput {
       throw new IllegalArgumentException("Slice " + sliceDescription + " out of bounds: " +
           "offset=" + offset + ",length=" + length + ",fileLength=" + this.length() + ": " + toString());
     }
-    LOG.info("[slice][" + toString() + "@" + hashCode() + "] " + getFullSliceDescription(sliceDescription) + ", offset=" + offset + ", length=" + length + ", fileLength=" + this.length());
+    LOG.trace("[slice][" + toString() + "@" + hashCode() + "] " + getFullSliceDescription(sliceDescription) + ", offset=" + offset + ", length=" + length + ", fileLength=" + this.length());
     return new S3IndexInput(s3Client, objectSummary, off + offset, length, defaultBufferSize(length));
   }
 
   @Override
   public S3IndexInput clone() {
     S3IndexInput clone = (S3IndexInput) super.clone();
-    LOG.info("[clone][" + toString() + "@" + hashCode() + "], clone=" + clone.hashCode());
+    LOG.trace("[clone][" + toString() + "@" + hashCode() + "], clone=" + clone.hashCode());
     return clone;
   }
 

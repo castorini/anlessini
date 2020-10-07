@@ -34,7 +34,7 @@ public class S3CachedReader {
   }
 
   protected int read(S3ObjectSummary summary, ByteBuffer b, long startOffset, int length) throws IOException {
-    LOG.info("[read] " + summary + " @" + startOffset + ":" + length);
+    LOG.trace("[read] " + summary + " @" + startOffset + ":" + length);
     List<S3FileBlock> fileBlocks = S3FileBlock.of(summary, startOffset, length);
     final Map<S3FileBlock, byte[]> cacheBlocks = new HashMap<>();
     fileBlocks.forEach(block -> cacheBlocks.put(block, cache.getBlock(block)));
@@ -55,7 +55,7 @@ public class S3CachedReader {
       int downloadLength = Math.toIntExact(downloadEndOffset - downloadStartOffset);
       List<S3FileBlock> downloadBlocks = S3FileBlock.of(summary, downloadStartOffset, downloadLength);
 
-      LOG.info("[readFromS3] " + summary + " @" + downloadStartOffset + ":" + downloadLength);
+      LOG.trace("[readFromS3] " + summary + " @" + downloadStartOffset + ":" + downloadLength);
       GetObjectRequest rangeObjectRequest = new GetObjectRequest(summary.getBucketName(), summary.getKey())
           .withRange(downloadStartOffset, downloadEndOffset - 1);
       S3Object object = s3Client.getObject(rangeObjectRequest);

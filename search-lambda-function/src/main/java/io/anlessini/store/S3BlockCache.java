@@ -69,7 +69,7 @@ public class S3BlockCache {
     long newSize = size.addAndGet(cb.size());
     cache.put(fileBlock, cb);
     elements.incrementAndGet();
-    LOG.info("Cached block " + fileBlock + " with " + data.length + " bytes at " + accessTime);
+    LOG.trace("Cached block " + fileBlock + " with " + data.length + " bytes at " + accessTime);
     if (newSize > MAX_HEAP_SIZE && !evictionInProgress) {
       evict();
     }
@@ -91,7 +91,7 @@ public class S3BlockCache {
       CacheBlob cb;
       while ((cb = evictionQueue.poll()) != null) {
         if (cb.size() < MIN_EVICTABLE_SIZE) continue;
-        LOG.info("Evicted block " + cb.fileBlock + " with " + cb.size() + " bytes");
+        LOG.trace("Evicted block " + cb.fileBlock + " with " + cb.size() + " bytes");
         cache.remove(cb.fileBlock);
         freedBytes += cb.size();
         if (freedBytes >= bytesToFree) {
@@ -108,10 +108,10 @@ public class S3BlockCache {
     CacheBlob cb = cache.get(fileBlock);
     long accessTime = count.incrementAndGet();
     if (cb == null) {
-      LOG.info("Missed block " + fileBlock + " at " + accessTime);
+      LOG.trace("Missed block " + fileBlock + " at " + accessTime);
       return null;
     }
-    LOG.info("Accessed block " + fileBlock + " at " + accessTime);
+    LOG.trace("Accessed block " + fileBlock + " at " + accessTime);
     cb.access(accessTime);
     return cb.data;
   }
@@ -132,7 +132,7 @@ public class S3BlockCache {
     }
 
     public void access(long accessTime) {
-      LOG.info("Accessed block " + fileBlock + " at " + accessTime);
+      LOG.trace("Accessed block " + fileBlock + " at " + accessTime);
       this.accessTime = accessTime;
     }
 
