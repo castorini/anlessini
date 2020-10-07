@@ -105,6 +105,11 @@ public class ImportCollection {
      * Counter for unexpected errors
      */
     public AtomicLong errors = new AtomicLong();
+
+    /**
+     * Counter for documents within a batch that had duplicated ids
+     */
+    public AtomicLong duplicated = new AtomicLong();
   }
 
   private static class DynamoClientFactory extends BasePooledObjectFactory<AmazonDynamoDB> {
@@ -167,7 +172,7 @@ public class ImportCollection {
 
     try {
       // Wait for existing tasks to terminate
-      while (!executor.awaitTermination(1, TimeUnit.MINUTES)) {
+      while (!executor.awaitTermination(30, TimeUnit.SECONDS)) {
         if (segmentCnt == 1) {
           LOG.info(String.format("%,d documents imported", counters.imported.get()));
         } else {
@@ -189,6 +194,7 @@ public class ImportCollection {
     LOG.info(String.format("empty:       %,12d", counters.empty.get()));
     LOG.info(String.format("skipped:     %,12d", counters.skipped.get()));
     LOG.info(String.format("errors:      %,12d", counters.errors.get()));
+    LOG.info(String.format("duplicated:  %,12d", counters.duplicated.get()));
 
     final long durationMillis = TimeUnit.MILLISECONDS.convert(System.nanoTime() - start, TimeUnit.NANOSECONDS);
     LOG.info(String.format("Total %,d documents indexed in %s", counters.imported.get(),
@@ -200,7 +206,7 @@ public class ImportCollection {
     private final Path input;
     private final DocumentCollection collection;
     private FileSegment<SourceDocument> fileSegment;
-    private List<Document> batch;
+    private Map<String, Item> batch;
 
     private ImporterThread(Path input, DocumentCollection collection) {
       this.input = input;
@@ -216,7 +222,7 @@ public class ImportCollection {
             (LuceneDocumentGenerator) generatorClass.getDeclaredConstructor(IndexArgs.class).newInstance(new IndexArgs());
 
         long cnt = 0;
-        batch = new ArrayList<>();
+        batch = new HashMap<>();
 
         // in order to call close() and clean up resources in case of exception
         fileSegment = collection.createFileSegment(input);
@@ -242,12 +248,18 @@ public class ImportCollection {
             continue;
           }
 
-          batch.add(doc);
+          Item item = toDynamoDBItem(doc);
+          String id = item.getString(IndexArgs.ID);
+          if (batch.containsKey(id)) {
+            counters.duplicated.incrementAndGet();
+          }
+          batch.put(id, item);
+
           if (batch.size() >= args.dynamoBatchSize) {
             sendBatchRequest();
             cnt += batch.size();
             counters.imported.addAndGet(batch.size());
-            batch = new ArrayList<>();
+            batch = new HashMap<>();
           }
         }
 
@@ -283,9 +295,8 @@ public class ImportCollection {
 
     private void sendBatchRequest() throws Exception {
       int retries = 0;
-      TableWriteItems items = new TableWriteItems(args.dynamoTable)
-          .withItemsToPut(batch.stream().map(this::toDynamoDBItem).collect(Collectors.toList()));
-      LOG.info("Writing " + items.getItemsToPut().size() + " items to DynamoDB");
+      TableWriteItems items = new TableWriteItems(args.dynamoTable).withItemsToPut(batch.values());
+//      LOG.info("Writing " + items.getItemsToPut().size() + " items to DynamoDB");
 
       AmazonDynamoDB dynamoDBClient = dynamoPool.borrowObject();
       DynamoDB dynamoDB = new DynamoDB(dynamoDBClient);
