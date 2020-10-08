@@ -69,6 +69,9 @@ public class ImportCollection {
     @Option(name = "-dynamo.batchSize", metaVar = "[num]",
         usage = "Batch size of the BatchWriteItem operation, capped at 25")
     public int dynamoBatchSize = 25;
+
+    @Option(name = "-dryrun", usage = "Do not write to DynamoDB, instead just process the collection and print out stats")
+    public boolean dryrun = false;
   }
 
   private final ImportArgs args;
@@ -294,6 +297,8 @@ public class ImportCollection {
     }
 
     private void sendBatchRequest() throws Exception {
+      if (args.dryrun) return;
+
       int retries = 0;
       TableWriteItems items = new TableWriteItems(args.dynamoTable).withItemsToPut(batch.values());
 //      LOG.info("Writing " + items.getItemsToPut().size() + " items to DynamoDB");
