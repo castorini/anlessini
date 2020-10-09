@@ -7,6 +7,7 @@ import com.amazonaws.services.dynamodbv2.document.DynamoDB;
 import com.amazonaws.services.dynamodbv2.document.Item;
 import com.amazonaws.services.dynamodbv2.document.TableWriteItems;
 import com.amazonaws.services.dynamodbv2.model.*;
+import com.google.common.base.Utf8;
 import io.anserini.collection.DocumentCollection;
 import io.anserini.collection.FileSegment;
 import io.anserini.collection.SourceDocument;
@@ -32,6 +33,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -40,6 +42,7 @@ import java.util.stream.Collectors;
 
 public class ImportCollection {
   private static final Logger LOG = LogManager.getLogger(ImportCollection.class);
+  private static final long DYNAMO_ITEM_SIZE_LIMIT = 400 * 1024; // 400 KB
 
   public static class ImportArgs {
     @Option(name = "-input", metaVar = "[path]", required = true,
@@ -81,6 +84,8 @@ public class ImportCollection {
   private final Counters counters;
   private final DocumentCollection collection;
   private ObjectPool<AmazonDynamoDB> dynamoPool;
+  private final Map<String, Item> sampledLargeItem;
+  private final AtomicLong totalWriteBytes;
 
   public final class Counters {
     /**
@@ -105,7 +110,7 @@ public class ImportCollection {
     public AtomicLong skipped = new AtomicLong();
 
     /**
-     * Counter for unexpected errors
+     * Counter for unexpected document errors
      */
     public AtomicLong errors = new AtomicLong();
 
@@ -113,6 +118,11 @@ public class ImportCollection {
      * Counter for documents within a batch that had duplicated ids
      */
     public AtomicLong duplicated = new AtomicLong();
+
+    /**
+     * Counter for documents that are oversized
+     */
+    public AtomicLong oversized = new AtomicLong();
   }
 
   private static class DynamoClientFactory extends BasePooledObjectFactory<AmazonDynamoDB> {
@@ -151,6 +161,13 @@ public class ImportCollection {
     dynamoPool = new GenericObjectPool<>(new DynamoClientFactory(), config);
 
     counters = new Counters();
+    totalWriteBytes = new AtomicLong();
+    sampledLargeItem = Collections.synchronizedMap(new LinkedHashMap<>(){
+      @Override
+      protected boolean removeEldestEntry(Map.Entry<String, Item> eldest) {
+        return size() > 5;
+      }
+    });
   }
 
   public void run() {
@@ -198,10 +215,25 @@ public class ImportCollection {
     LOG.info(String.format("skipped:     %,12d", counters.skipped.get()));
     LOG.info(String.format("errors:      %,12d", counters.errors.get()));
     LOG.info(String.format("duplicated:  %,12d", counters.duplicated.get()));
+    LOG.info(String.format("oversized:   %,12d", counters.oversized.get()));
 
     final long durationMillis = TimeUnit.MILLISECONDS.convert(System.nanoTime() - start, TimeUnit.NANOSECONDS);
-    LOG.info(String.format("Total %,d documents indexed in %s", counters.imported.get(),
+    LOG.info(String.format("Total %,d documents imported in %s", counters.imported.get(),
         DurationFormatUtils.formatDuration(durationMillis, "HH:mm:ss")));
+
+    final long durationSeconds = TimeUnit.SECONDS.convert(durationMillis, TimeUnit.MILLISECONDS);
+    LOG.info("Writing " + humanize(totalWriteBytes.get()) + " to DynamoDB, " +
+        "writing capacity units required if provisioned (pessimistic estimate): " + totalWriteBytes.get() / 1024 / durationSeconds);
+
+    if (!sampledLargeItem.isEmpty()) {
+      LOG.warn("Sampled documents that exceeded maximum item size: " + sampledLargeItem.keySet());
+    }
+  }
+
+  private static String humanize(long bytes) {
+    String[] prefix = {"", "K", "M", "G", "T", "P", "E", "Z", "Y"};
+    int pow = (int)(Math.log(bytes) / Math.log(2)) / 10; // 1024^pow
+    return String.format("%.2f %sB", bytes / Math.pow(2, pow * 10), prefix[pow]);
   }
 
   private final class ImporterThread extends Thread {
@@ -253,10 +285,18 @@ public class ImportCollection {
 
           Item item = toDynamoDBItem(doc);
           String id = item.getString(IndexArgs.ID);
+          long itemSize = calculateSize(item);
+          if (itemSize > DYNAMO_ITEM_SIZE_LIMIT) {
+            counters.oversized.incrementAndGet();
+            sampledLargeItem.put(id, item);
+            continue;
+          }
           if (batch.containsKey(id)) {
             counters.duplicated.incrementAndGet();
+          } else {
+            totalWriteBytes.addAndGet(itemSize);
+            batch.put(id, item);
           }
-          batch.put(id, item);
 
           if (batch.size() >= args.dynamoBatchSize) {
             sendBatchRequest();
@@ -348,34 +388,59 @@ public class ImportCollection {
         dynamoPool.returnObject(dynamoDBClient);
       }
     }
+  }
 
-    public Item toDynamoDBItem(Document doc) {
-      Item ret = new Item();
-      Map<String, List<IndexableField>> documentFields = new HashMap<>();
-      for (IndexableField field: doc.getFields()) {
-        List<IndexableField> fields = documentFields.getOrDefault(field.name(), new LinkedList<>());
-        fields.add(field);
-        documentFields.put(field.name(), fields);
-      }
-
-      for (Map.Entry<String, List<IndexableField>> entry: documentFields.entrySet()) {
-        String fieldName = entry.getKey();
-        List<String> fieldValues = entry.getValue().stream()
-            .map(IndexableField::stringValue)
-            .filter(Objects::nonNull)
-            .collect(Collectors.toList());
-        ret.with(fieldName, fieldValues);
-      }
-
-      // override single-value fields
-      ret.with(IndexArgs.ID, doc.getField(IndexArgs.ID).stringValue());
-      ret.with(IndexArgs.CONTENTS, doc.getField(IndexArgs.CONTENTS).stringValue());
-      if (doc.getField(IndexArgs.RAW) != null) {
-        ret.with(IndexArgs.RAW, doc.getField(IndexArgs.RAW).stringValue());
-      }
-
-      return ret;
+  public static Item toDynamoDBItem(Document doc) {
+    Item ret = new Item();
+    Map<String, List<IndexableField>> documentFields = new HashMap<>();
+    for (IndexableField field: doc.getFields()) {
+      List<IndexableField> fields = documentFields.getOrDefault(field.name(), new LinkedList<>());
+      fields.add(field);
+      documentFields.put(field.name(), fields);
     }
+
+    for (Map.Entry<String, List<IndexableField>> entry: documentFields.entrySet()) {
+      String fieldName = entry.getKey();
+      List<String> fieldValues = entry.getValue().stream()
+          .map(IndexableField::stringValue)
+          .filter(Objects::nonNull)
+          .collect(Collectors.toList());
+      ret.with(fieldName, fieldValues);
+    }
+
+    // override single-value fields
+    ret.with(IndexArgs.ID, doc.getField(IndexArgs.ID).stringValue());
+    ret.with(IndexArgs.CONTENTS, doc.getField(IndexArgs.CONTENTS).stringValue());
+    if (doc.getField(IndexArgs.RAW) != null) {
+      ret.with(IndexArgs.RAW, doc.getField(IndexArgs.RAW).stringValue());
+    }
+
+    return ret;
+  }
+
+  /**
+   * AWS does not provide official guide on calculating item size, nor does their library provides method to do so.
+   * Here is a size estimation by following this post:
+   * https://medium.com/@zaccharles/calculating-a-dynamodb-items-size-and-consumed-capacity-d1728942eb7c
+   */
+  private static long calculateSize(Item item) {
+    long size = 0;
+    Iterable<Map.Entry<String, Object>> attrs = item.attributes();
+    for (Map.Entry<String, Object> attr : attrs) {
+      String fieldName = attr.getKey();
+      size += Utf8.encodedLength(fieldName);
+      if (attr.getValue() instanceof String) {
+        size += Utf8.encodedLength((String) attr.getValue());
+      } else { // attr.getValue() instanceof List<String>
+        size += 3; // all list use 3 bytes, regardless of its contents
+        List<String> values = (List<String>) attr.getValue();
+        for (String value : values) {
+          size += 1; // each element uses 1 extra byte
+          size += Utf8.encodedLength(value);
+        }
+      }
+    }
+    return size;
   }
 
   public static void main(String[] args) throws Exception {
