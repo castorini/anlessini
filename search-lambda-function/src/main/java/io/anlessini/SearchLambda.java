@@ -59,9 +59,10 @@ public class SearchLambda implements RequestHandler<APIGatewayProxyRequestEvent,
   public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
     APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent();
     String queryString = input.getQueryStringParameters().get("query");
+    int maxDocs = Integer.parseInt(input.getQueryStringParameters().getOrDefault("max_docs", "10"));
 
     try {
-      String hits = search(queryString);
+      String hits = search(queryString, maxDocs);
       response.setStatusCode(200);
       response.setBody(hits);
     } catch (IOException e) {
@@ -81,7 +82,7 @@ public class SearchLambda implements RequestHandler<APIGatewayProxyRequestEvent,
     return response;
   }
 
-  public String search(String qstring) throws IOException {
+  public String search(String qstring, int maxDocs) throws IOException {
     long startTime = System.currentTimeMillis();
     Analyzer analyzer = new EnglishAnalyzer();
     Similarity similarity = new BM25Similarity(0.9f, 0.4f);
@@ -91,7 +92,7 @@ public class SearchLambda implements RequestHandler<APIGatewayProxyRequestEvent,
 
     LOG.info("Query: " + qstring);
     Query query = SearchDemo.buildQuery("contents", analyzer, qstring);
-    TopDocs topDocs = searcher.search(query, 10);
+    TopDocs topDocs = searcher.search(query, maxDocs);
 
     LOG.info("Number of hits: " + topDocs.scoreDocs.length);
 
