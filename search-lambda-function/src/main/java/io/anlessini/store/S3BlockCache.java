@@ -1,5 +1,6 @@
 package io.anlessini.store;
 
+import com.google.common.util.concurrent.AtomicLongMap;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -27,15 +28,27 @@ public class S3BlockCache {
   /**
    * Current size of cache in bytes
    */
-  private final AtomicLong size;
+  private final AtomicLong size = new AtomicLong();
   /**
    * Cache access count (sequential ID)
    */
-  private final AtomicLong count;
+  private final AtomicLong count = new AtomicLong();
   /**
    * Current number of cached elements
    */
-  private final AtomicLong elements;
+  private final AtomicLong elements = new AtomicLong();
+  /**
+   * The number of cache hits
+   */
+  private final AtomicLongMap<String> hitCount = AtomicLongMap.create();
+  /**
+   * The number of cache misses
+   */
+  private final AtomicLongMap<String> missCount = AtomicLongMap.create();
+  /**
+   * The number of cache block eviction
+   */
+  private final AtomicLongMap<String> evictCount = AtomicLongMap.create();
 
   private volatile boolean evictionInProgress = false;
   private final ReentrantLock evictionLock = new ReentrantLock(true);
@@ -52,10 +65,7 @@ public class S3BlockCache {
   }
 
   private S3BlockCache() {
-    size = new AtomicLong(0L);
     cache = new ConcurrentHashMap<>(DEFAULT_INITIAL_CACHE_SIZE, DEFAULT_LOAD_FACTOR, DEFAULT_CONCURRENCY_LEVEL);
-    count = new AtomicLong(0L);
-    elements = new AtomicLong(0L);
   }
 
   protected void cacheBlock(S3FileBlock fileBlock, byte[] data) {
@@ -69,7 +79,7 @@ public class S3BlockCache {
     long newSize = size.addAndGet(cb.size());
     cache.put(fileBlock, cb);
     elements.incrementAndGet();
-    LOG.trace("Cached block " + fileBlock + " with " + data.length + " bytes at " + accessTime);
+    LOG.info("Cached block " + fileBlock + " with " + data.length + " bytes at " + accessTime);
     if (newSize > MAX_HEAP_SIZE && !evictionInProgress) {
       evict();
     }
@@ -91,7 +101,8 @@ public class S3BlockCache {
       CacheBlob cb;
       while ((cb = evictionQueue.poll()) != null) {
         if (cb.size() < MIN_EVICTABLE_SIZE) continue;
-        LOG.trace("Evicted block " + cb.fileBlock + " with " + cb.size() + " bytes");
+        LOG.info("Evicted block " + cb.fileBlock + " with " + cb.size() + " bytes");
+        evictCount.incrementAndGet(cb.fileBlock.summary.getKey());
         cache.remove(cb.fileBlock);
         freedBytes += cb.size();
         if (freedBytes >= bytesToFree) {
@@ -108,12 +119,43 @@ public class S3BlockCache {
     CacheBlob cb = cache.get(fileBlock);
     long accessTime = count.incrementAndGet();
     if (cb == null) {
-      LOG.trace("Missed block " + fileBlock + " at " + accessTime);
+      LOG.info("Missed block " + fileBlock + " at " + accessTime);
+      missCount.incrementAndGet(fileBlock.summary.getKey());
       return null;
     }
-    LOG.trace("Accessed block " + fileBlock + " at " + accessTime);
+    LOG.info("Accessed block " + fileBlock + " at " + accessTime);
+    hitCount.incrementAndGet(fileBlock.summary.getKey());
     cb.access(accessTime);
     return cb.data;
+  }
+
+  public void logStats() {
+    Set<String> fileKeys = new HashSet<>();
+    fileKeys.addAll(hitCount.asMap().keySet());
+    fileKeys.addAll(missCount.asMap().keySet());
+    fileKeys.addAll(evictCount.asMap().keySet());
+
+    LOG.info("================================= Cache Stats =================================");
+    /**
+     *LOG.info(String.format("%-20s %10s %10s %10s %10s %10s %10s", "Field", "Max(bytes)", "Min(bytes)", "Avg(bytes)", "Max(KB)", "Min(KB)", "Avg(KB)"));
+     *     for (String fieldName: fieldNames) {
+     *       Stats stats = allFieldStats.stream().map(m -> m.getOrDefault(fieldName, new Stats())).reduce(Stats::combine).get();
+     *       LOG.info(String.format("%-20s %,10d %,10d %,10d %,10d %,10d %,10d",
+     *           fieldName, stats.max, stats.min, stats.avg.longValueExact(),
+     *           stats.max / 1024, stats.min / 1024, stats.avg.longValueExact() / 1024));
+     *     }
+     *     Stats totalItemStats = allFieldStats.stream().map(m -> m.getOrDefault("TOTAL_ITEM_SIZE", new Stats())).reduce(Stats::combine).get();
+     *     LOG.info(String.format("%-20s %,10d %,10d %,10d %,10d %,10d %,10d",
+     *         "total", totalItemStats.max, totalItemStats.min, totalItemStats.avg.longValueExact(),
+     *         totalItemStats.max / 1024, totalItemStats.min / 1024, totalItemStats.avg.longValueExact() / 1024));
+     *     LOG.info(String.format("Total number of large item: %d", largeItemDocids.size()));
+     *     LOG.info(String.format("Large Item docids: %s", largeItemDocids.toString()));
+     */
+    LOG.info(String.format("%-20s %10s %10s %10s", "Key", "Hits", "Misses", "Evictions"));
+    fileKeys.stream().sorted().forEach(key -> {
+      LOG.info(String.format("%-20s %,10d %,10d %,10d", key, hitCount.get(key), missCount.get(key), evictCount.get(key)));
+    });
+    LOG.info("Total cache size=" + size.get() + ", elements=" + elements.get());
   }
 
   public static class CacheBlob {
@@ -132,7 +174,7 @@ public class S3BlockCache {
     }
 
     public void access(long accessTime) {
-      LOG.trace("Accessed block " + fileBlock + " at " + accessTime);
+      LOG.info("Accessed block " + fileBlock + " at " + accessTime);
       this.accessTime = accessTime;
     }
 

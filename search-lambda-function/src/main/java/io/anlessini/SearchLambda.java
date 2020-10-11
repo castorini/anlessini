@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.anlessini.store.S3BlockCache;
 import io.anlessini.store.S3Directory;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -80,6 +81,8 @@ public class SearchLambda implements RequestHandler<APIGatewayProxyRequestEvent,
         LOG.error("Error writing JSON message", ex);
       }
     }
+
+    S3BlockCache.getInstance().logStats();
 
     response.setHeaders(Map.of(
         "Content-Type", "application/json",
