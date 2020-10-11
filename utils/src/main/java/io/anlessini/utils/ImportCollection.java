@@ -1,5 +1,6 @@
 package io.anlessini.utils;
 
+import com.amazonaws.retry.RetryUtils;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.dynamodbv2.document.BatchWriteItemOutcome;
@@ -350,17 +351,19 @@ public class ImportCollection {
         while (outcome == null) {
           try {
             outcome = dynamoDB.batchWriteItem(items);
-          } catch (ProvisionedThroughputExceededException e) {
-            LOG.error("Error sending BatchWriteItem request to DynamoDB", e);
-            if (retries++ < MAX_REQUEST_RETRIES) {
-              Thread.sleep((long) (Math.pow(2, retries) * 1000));
+          } catch (AmazonDynamoDBException e) {
+            boolean retryable = RetryUtils.isRetryableServiceException(e) || RetryUtils.isThrottlingException(e);
+            if (retryable) {
+              LOG.error("Encountered retryable error, entering exponential backoff", e);
+              if (retries++ < MAX_REQUEST_RETRIES) {
+                Thread.sleep((long) (Math.pow(2, retries) * 1000));
+              } else {
+                throw new RuntimeException("BatchWriteItem failed after too many retries", e);
+              }
             } else {
-              throw new RuntimeException("BatchWriteItem failed after too many retries", e);
+              LOG.error("Encountered non-retryable error", e);
+              throw new RuntimeException("BatchWriteItem failed due to non-retryable error", e);
             }
-          } catch (ResourceNotFoundException | RequestLimitExceededException |
-              ItemCollectionSizeLimitExceededException | InternalServerErrorException e) {
-            LOG.error("Encountered non-retriable error", e);
-            throw new RuntimeException("BatchWriteItem failed due to non-retriable error", e);
           }
         }
 
@@ -371,17 +374,19 @@ public class ImportCollection {
           try {
             writeUnprocessedResult = dynamoDBClient.batchWriteItem(unprocessedItems);
             unprocessedItems = writeUnprocessedResult.getUnprocessedItems();
-          } catch (ProvisionedThroughputExceededException e) {
-            LOG.error("Error sending BatchWriteItem request to DynamoDB", e);
-            if (retries++ < MAX_REQUEST_RETRIES) {
-              Thread.sleep((long) (Math.pow(2, retries) * 1000));
+          } catch (AmazonDynamoDBException e) {
+            boolean retryable = RetryUtils.isRetryableServiceException(e) || RetryUtils.isThrottlingException(e);
+            if (retryable) {
+              LOG.error("Encountered retryable error, entering exponential backoff", e);
+              if (retries++ < MAX_REQUEST_RETRIES) {
+                Thread.sleep((long) (Math.pow(2, retries) * 1000));
+              } else {
+                throw new RuntimeException("BatchWriteItem failed after too many retries", e);
+              }
             } else {
-              throw new RuntimeException("BatchWriteItem failed after too many retries", e);
+              LOG.error("Encountered non-retryable error", e);
+              throw new RuntimeException("BatchWriteItem failed due to non-retryable error", e);
             }
-          } catch (ResourceNotFoundException | RequestLimitExceededException |
-              ItemCollectionSizeLimitExceededException | InternalServerErrorException e) {
-            LOG.error("Encountered non-retriable error", e);
-            throw new RuntimeException("BatchWriteItem failed due to non-retriable error", e);
           }
         }
       } finally {
