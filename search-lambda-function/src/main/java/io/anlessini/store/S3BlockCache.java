@@ -102,8 +102,9 @@ public class S3BlockCache {
       while ((cb = evictionQueue.poll()) != null) {
         if (cb.size() < MIN_EVICTABLE_SIZE) continue;
         LOG.info("Evicted block " + cb.fileBlock + " with " + cb.size() + " bytes");
-        evictCount.incrementAndGet(cb.fileBlock.summary.getKey());
         cache.remove(cb.fileBlock);
+        evictCount.incrementAndGet(cb.fileBlock.summary.getKey());
+        size.addAndGet(-1 * cb.size());
         freedBytes += cb.size();
         if (freedBytes >= bytesToFree) {
           break;
