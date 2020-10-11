@@ -1,5 +1,6 @@
 package io.anlessini.store;
 
+import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.AtomicLongMap;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -79,7 +80,7 @@ public class S3BlockCache {
     long newSize = size.addAndGet(cb.size());
     cache.put(fileBlock, cb);
     elements.incrementAndGet();
-    LOG.info("Cached block " + fileBlock + " with " + data.length + " bytes at " + accessTime);
+    LOG.trace("Cached block " + fileBlock + " with " + data.length + " bytes at " + accessTime);
     if (newSize > MAX_HEAP_SIZE && !evictionInProgress) {
       evict();
     }
@@ -101,7 +102,7 @@ public class S3BlockCache {
       CacheBlob cb;
       while ((cb = evictionQueue.poll()) != null) {
         if (cb.size() < MIN_EVICTABLE_SIZE) continue;
-        LOG.info("Evicted block " + cb.fileBlock + " with " + cb.size() + " bytes");
+        LOG.trace("Evicted block " + cb.fileBlock + " with " + cb.size() + " bytes");
         cache.remove(cb.fileBlock);
         evictCount.incrementAndGet(cb.fileBlock.summary.getKey());
         size.addAndGet(-1 * cb.size());
@@ -120,43 +121,34 @@ public class S3BlockCache {
     CacheBlob cb = cache.get(fileBlock);
     long accessTime = count.incrementAndGet();
     if (cb == null) {
-      LOG.info("Missed block " + fileBlock + " at " + accessTime);
+      LOG.trace("Missed block " + fileBlock + " at " + accessTime);
       missCount.incrementAndGet(fileBlock.summary.getKey());
       return null;
     }
-    LOG.info("Accessed block " + fileBlock + " at " + accessTime);
+    LOG.trace("Accessed block " + fileBlock + " at " + accessTime);
     hitCount.incrementAndGet(fileBlock.summary.getKey());
     cb.access(accessTime);
     return cb.data;
   }
 
-  public void logStats() {
+  public void logStats(boolean clearStats) {
     Set<String> fileKeys = new HashSet<>();
     fileKeys.addAll(hitCount.asMap().keySet());
     fileKeys.addAll(missCount.asMap().keySet());
     fileKeys.addAll(evictCount.asMap().keySet());
 
-    LOG.info("================================= Cache Stats =================================");
-    /**
-     *LOG.info(String.format("%-20s %10s %10s %10s %10s %10s %10s", "Field", "Max(bytes)", "Min(bytes)", "Avg(bytes)", "Max(KB)", "Min(KB)", "Avg(KB)"));
-     *     for (String fieldName: fieldNames) {
-     *       Stats stats = allFieldStats.stream().map(m -> m.getOrDefault(fieldName, new Stats())).reduce(Stats::combine).get();
-     *       LOG.info(String.format("%-20s %,10d %,10d %,10d %,10d %,10d %,10d",
-     *           fieldName, stats.max, stats.min, stats.avg.longValueExact(),
-     *           stats.max / 1024, stats.min / 1024, stats.avg.longValueExact() / 1024));
-     *     }
-     *     Stats totalItemStats = allFieldStats.stream().map(m -> m.getOrDefault("TOTAL_ITEM_SIZE", new Stats())).reduce(Stats::combine).get();
-     *     LOG.info(String.format("%-20s %,10d %,10d %,10d %,10d %,10d %,10d",
-     *         "total", totalItemStats.max, totalItemStats.min, totalItemStats.avg.longValueExact(),
-     *         totalItemStats.max / 1024, totalItemStats.min / 1024, totalItemStats.avg.longValueExact() / 1024));
-     *     LOG.info(String.format("Total number of large item: %d", largeItemDocids.size()));
-     *     LOG.info(String.format("Large Item docids: %s", largeItemDocids.toString()));
-     */
-    LOG.info(String.format("%-20s %10s %10s %10s", "Key", "Hits", "Misses", "Evictions"));
+    LOG.trace("================================= Cache Stats =================================");
+    LOG.trace(String.format("%-20s %10s %10s %10s", "Key", "Hits", "Misses", "Evictions"));
     fileKeys.stream().sorted().forEach(key -> {
-      LOG.info(String.format("%-20s %,10d %,10d %,10d", key, hitCount.get(key), missCount.get(key), evictCount.get(key)));
+      LOG.trace(String.format("%-20s %,10d %,10d %,10d", key, hitCount.get(key), missCount.get(key), evictCount.get(key)));
     });
-    LOG.info("Total cache size=" + size.get() + ", elements=" + elements.get());
+    LOG.trace("Total cache size=" + size.get() + ", elements=" + elements.get());
+
+    if (clearStats) {
+      hitCount.putAll(Maps.transformValues(hitCount.asMap(), input -> 0L));
+      missCount.putAll(Maps.transformValues(missCount.asMap(), input -> 0L));
+      evictCount.putAll(Maps.transformValues(evictCount.asMap(), input -> 0L));
+    }
   }
 
   public static class CacheBlob {

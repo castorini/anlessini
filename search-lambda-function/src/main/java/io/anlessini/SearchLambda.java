@@ -82,7 +82,7 @@ public class SearchLambda implements RequestHandler<APIGatewayProxyRequestEvent,
       }
     }
 
-    S3BlockCache.getInstance().logStats();
+    S3BlockCache.getInstance().logStats(System.getenv("CLEAR_CACHE_STATS").equals("TRUE"));
 
     response.setHeaders(Map.of(
         "Content-Type", "application/json",
