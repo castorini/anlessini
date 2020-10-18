@@ -23,10 +23,6 @@ public class S3IndexInput extends BufferedIndexInput {
    * The size of the buffer used by BufferedIndexInput, default to 4 MB
    */
   private static final int DEFAULT_BUFFER_SIZE = 1024 * 1024 * 4;
-  /**
-   * Try to read eagerly from S3 to reduce the number of total GETs, default to 128 MB
-   */
-  private static final int DEFAULT_DOWNLOAD_SIZE = 1024 * 1024 * 128;
 
   public static class ReadStats {
     public final AtomicLong readTotal = new AtomicLong();
@@ -120,7 +116,6 @@ public class S3IndexInput extends BufferedIndexInput {
     if (!cacheMisses.isEmpty()) {
       long downloadStartOffset = cacheMisses.peekFirst().offset;
       long downloadEndOffset = cacheMisses.peekLast().offset + cacheMisses.peekLast().length();
-      downloadEndOffset = Math.max(downloadStartOffset + DEFAULT_DOWNLOAD_SIZE, downloadEndOffset);
       downloadEndOffset = Math.min(summary.getSize(), downloadEndOffset);
       int downloadLength = Math.toIntExact(downloadEndOffset - downloadStartOffset);
       PriorityQueue<S3FileBlock> downloadBlocks = S3FileBlock.of(summary, downloadStartOffset, downloadLength);
