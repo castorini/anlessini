@@ -167,7 +167,7 @@ public class S3BlockCache {
     }
 
     public void access(long accessTime) {
-      LOG.info("Accessed block " + fileBlock + " at " + accessTime);
+      LOG.trace("Accessed block " + fileBlock + " at " + accessTime);
       this.accessTime = accessTime;
     }
 

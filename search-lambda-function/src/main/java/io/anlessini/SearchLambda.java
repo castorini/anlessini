@@ -17,6 +17,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.anlessini.store.S3BlockCache;
 import io.anlessini.store.S3Directory;
+import io.anlessini.store.S3IndexInput;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.lucene.analysis.Analyzer;
@@ -82,8 +83,6 @@ public class SearchLambda implements RequestHandler<APIGatewayProxyRequestEvent,
       }
     }
 
-    S3BlockCache.getInstance().logStats(System.getenv("CLEAR_CACHE_STATS").equals("TRUE"));
-
     response.setHeaders(Map.of(
         "Content-Type", "application/json",
         "Access-Control-Allow-Origin", "*"
@@ -114,6 +113,13 @@ public class SearchLambda implements RequestHandler<APIGatewayProxyRequestEvent,
     }
 
     LOG.info("Docids: " + Arrays.toString(docids));
+    S3BlockCache.getInstance().logStats(System.getenv("CLEAR_CACHE_STATS").equals("TRUE"));
+    LOG.info("Total bytes read from S3: " + S3IndexInput.stats.readFromS3.get()
+        + ", total bytes read: " + S3IndexInput.stats.readTotal.get());
+    if (System.getenv("CLEAR_CACHE_STATS").equals("TRUE")) {
+      S3IndexInput.stats.readTotal.set(0);
+      S3IndexInput.stats.readFromS3.set(0);
+    }
 
     ObjectNode rootNode = objectMapper.createObjectNode();
     rootNode.put("query_id", UUID.randomUUID().toString());
@@ -121,8 +127,8 @@ public class SearchLambda implements RequestHandler<APIGatewayProxyRequestEvent,
 
     for (int i = 0; i < topDocs.scoreDocs.length; i++) {
       // retreiving from dynamodb
-      Item item = dynamoTable.getItem("id", docids[i]);
-      response.add(item.toJSON());
+//      Item item = dynamoTable.getItem("id", docids[i]);
+//      response.add(item.toJSON());
     }
     rootNode.set("response", response);
     // System.out.println(mapper.writeValueAsString(rootNode));

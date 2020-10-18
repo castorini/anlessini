@@ -1,23 +1,44 @@
 package io.anlessini.store;
 
 import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.GetObjectRequest;
+import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+import com.google.common.collect.MinMaxPriorityQueue;
+import org.apache.commons.io.IOUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.lucene.store.BufferedIndexInput;
 
 import java.io.EOFException;
 import java.io.IOException;
-import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.PriorityQueue;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class S3IndexInput extends BufferedIndexInput {
   private static final Logger LOG = LogManager.getLogger(S3IndexInput.class);
-  private static final int DEFAULT_BUFFER_SIZE = 1024 * 1024 * 4; // 4 MB
+  /**
+   * The size of the buffer used by BufferedIndexInput, default to 4 MB
+   */
+  private static final int DEFAULT_BUFFER_SIZE = 1024 * 1024 * 4;
+  /**
+   * Try to read eagerly from S3 to reduce the number of total GETs, default to 128 MB
+   */
+  private static final int DEFAULT_DOWNLOAD_SIZE = 1024 * 1024 * 128;
+
+  public static class ReadStats {
+    public final AtomicLong readTotal = new AtomicLong();
+
+    public final AtomicLong readFromS3 = new AtomicLong();
+  }
+
+  public static final ReadStats stats = new ReadStats();
 
   private final AmazonS3 s3Client;
-  private final S3CachedReader reader;
-  private final S3ObjectSummary objectSummary;
-  private ByteBuffer bytebuf;
+  private final S3ObjectSummary summary;
+  private final S3BlockCache cache;
 
   /**
    * The start offset in the entire file, non-zero in the slice case
@@ -28,15 +49,15 @@ public class S3IndexInput extends BufferedIndexInput {
    */
   private final long end;
 
-  public S3IndexInput(AmazonS3 s3Client, S3ObjectSummary objectSummary) {
-    this(s3Client, objectSummary, 0, objectSummary.getSize(), defaultBufferSize(objectSummary.getSize()));
+  public S3IndexInput(AmazonS3 s3Client, S3ObjectSummary summary) {
+    this(s3Client, summary, 0, summary.getSize(), defaultBufferSize(summary.getSize()));
   }
 
-  public S3IndexInput(AmazonS3 s3Client, S3ObjectSummary objectSummary, long offset, long length, int bufferSize) {
-    super(objectSummary.getBucketName() + "/" + objectSummary.getKey(), bufferSize);
+  public S3IndexInput(AmazonS3 s3Client, S3ObjectSummary summary, long offset, long length, int bufferSize) {
+    super(summary.getBucketName() + "/" + summary.getKey(), bufferSize);
     this.s3Client = s3Client;
-    this.reader = new S3CachedReader(s3Client);
-    this.objectSummary = objectSummary;
+    this.cache = S3BlockCache.getInstance();
+    this.summary = summary;
     this.off = offset;
     this.end = offset + length;
     LOG.trace("Opened S3IndexInput " + toString() + "@" + hashCode() + " , bufferSize=" + getBufferSize());
@@ -60,19 +81,13 @@ public class S3IndexInput extends BufferedIndexInput {
   }
 
   @Override
-  protected void newBuffer(byte[] newBuffer) {
-    super.newBuffer(newBuffer);
-    bytebuf = ByteBuffer.wrap(newBuffer);
-  }
-
-  @Override
   public S3IndexInput slice(String sliceDescription, long offset, long length) throws IOException {
     if (offset < 0 || length < 0 || offset + length > this.length()) {
       throw new IllegalArgumentException("Slice " + sliceDescription + " out of bounds: " +
           "offset=" + offset + ",length=" + length + ",fileLength=" + this.length() + ": " + toString());
     }
     LOG.trace("[slice][" + toString() + "@" + hashCode() + "] " + getFullSliceDescription(sliceDescription) + ", offset=" + offset + ", length=" + length + ", fileLength=" + this.length());
-    return new S3IndexInput(s3Client, objectSummary, off + offset, length, defaultBufferSize(length));
+    return new S3IndexInput(s3Client, summary, off + offset, length, defaultBufferSize(length));
   }
 
   @Override
@@ -83,42 +98,71 @@ public class S3IndexInput extends BufferedIndexInput {
   }
 
   @Override
-  protected void readInternal(byte[] b, int offset, int length) throws IOException {
-    final ByteBuffer bb;
+  protected void readInternal(byte[] dst, final int offset, final int length) throws IOException {
+    final long startPos = getFilePointer() + this.off;
+    final long endPos = startPos + length;
 
-    if (b == buffer) { // using internal
-      assert bytebuf != null;
-      bytebuf.clear().position(offset);
-      bb = bytebuf;
-    } else {
-      bb = ByteBuffer.wrap(b, offset, length);
+    if (startPos + length > end) {
+      throw new EOFException("reading past EOF: " + toString() + "@" + hashCode());
     }
 
-    synchronized (this) {
-      long pos = getFilePointer() + this.off;
-
-      if (pos + length > end) {
-        throw new EOFException("Reading past EOF: " + toString() + "@" + hashCode());
+    LOG.trace("[read][" + summary.getKey() + "] @" + startPos + ":" + length);
+    final PriorityQueue<S3FileBlock> fileBlocks = S3FileBlock.of(summary, startPos, length);
+    final Map<S3FileBlock, byte[]> cacheBlocks = new HashMap<>();
+    final MinMaxPriorityQueue<S3FileBlock> cacheMisses = MinMaxPriorityQueue.create();
+    for (S3FileBlock fb : fileBlocks) {
+      cacheBlocks.put(fb, cache.getBlock(fb));
+      if (cacheBlocks.get(fb) == null) {
+        cacheMisses.add(fb);
       }
+    }
 
-      try {
-        int readLength = length;
-        while (readLength > 0) {
-          final int toRead = Math.min(DEFAULT_BUFFER_SIZE, readLength);
-          bb.limit(bb.position() + toRead);
-          assert bb.remaining() == toRead;
-          final int bytesRead = reader.read(objectSummary, bb, pos, toRead);
-          if (bytesRead < 0) {
-            throw new EOFException("Read past EOF: " + toString() + "@" + hashCode() + " off=" + offset + " len=" + length + " pos=" + pos + " chunk=" + toRead + " end=" + end);
-          }
-          assert bytesRead > 0 : "Read with non zero-length bb.remaining() must always read at least one byte";
-          pos += bytesRead;
-          readLength -= bytesRead;
+    if (!cacheMisses.isEmpty()) {
+      long downloadStartOffset = cacheMisses.peekFirst().offset;
+      long downloadEndOffset = cacheMisses.peekLast().offset + cacheMisses.peekLast().length();
+      downloadEndOffset = Math.max(downloadStartOffset + DEFAULT_DOWNLOAD_SIZE, downloadEndOffset);
+      downloadEndOffset = Math.min(summary.getSize(), downloadEndOffset);
+      int downloadLength = Math.toIntExact(downloadEndOffset - downloadStartOffset);
+      PriorityQueue<S3FileBlock> downloadBlocks = S3FileBlock.of(summary, downloadStartOffset, downloadLength);
+
+      LOG.trace("[readFromS3][" + summary.getKey() + "] @" + downloadStartOffset + ":" + downloadLength);
+      GetObjectRequest rangeObjectRequest = new GetObjectRequest(summary.getBucketName(), summary.getKey())
+          .withRange(downloadStartOffset, downloadEndOffset - 1);
+      S3Object object = s3Client.getObject(rangeObjectRequest);
+      stats.readFromS3.addAndGet(downloadLength);
+
+      for (S3FileBlock fb : downloadBlocks) {
+        byte[] data = new byte[fb.length()];
+        int bytesRead = IOUtils.read(object.getObjectContent(), data);
+        if (bytesRead != fb.length()) {
+          throw new IOException("block is not completely filled! fb=" + fb + " bytesRead=" + bytesRead);
         }
-        assert readLength == 0;
-      } catch (IOException ioe) {
-        throw new IOException(ioe.getMessage() + ": " + toString() + "@" + hashCode(), ioe);
+
+        cache.cacheBlock(fb, data);
+        cacheBlocks.put(fb, data);
       }
+
+      object.close();
+    }
+
+    int bytesRead = 0;
+    int dstOffset = offset;
+    for (S3FileBlock fb : fileBlocks) {
+      byte[] src = cacheBlocks.get(fb);
+      long blockStart = fb.offset, blockEnd = fb.offset + fb.length();
+      int toRead = Math.toIntExact(Math.min(blockEnd, endPos) - Math.max(blockStart, startPos));
+      int srcOffset = Math.toIntExact(Math.max(0, startPos - blockStart));
+      System.arraycopy(src, srcOffset, dst, dstOffset, toRead);
+
+      dstOffset += toRead;
+      bytesRead += toRead;
+
+      stats.readTotal.addAndGet(toRead);
+    }
+
+    if (bytesRead != length) {
+      throw new IOException("read is not fulfilled completely!" + toString()
+          + " offset=" + offset + " length=" + length + " bytesRead=" + bytesRead);
     }
   }
 

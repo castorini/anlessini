@@ -2,8 +2,7 @@ package io.anlessini.store;
 
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.PriorityQueue;
 
 public class S3FileBlock implements Comparable<S3FileBlock> {
   /**
@@ -15,10 +14,10 @@ public class S3FileBlock implements Comparable<S3FileBlock> {
   public final long blockIndex;
   public final long offset;
 
-  public static List<S3FileBlock> of(S3ObjectSummary summary, long offset, int length) {
+  public static PriorityQueue<S3FileBlock> of(S3ObjectSummary summary, long offset, int length) {
     long startIndex = offset / DEFAULT_BLOCK_SIZE;
-    long endIndex = (offset + length) / DEFAULT_BLOCK_SIZE;
-    List<S3FileBlock> ret = new ArrayList<>();
+    long endIndex = (offset + length - 1) / DEFAULT_BLOCK_SIZE;
+    PriorityQueue<S3FileBlock> ret = new PriorityQueue<>();
     for (long i = startIndex; i <= endIndex; i++) {
       ret.add(new S3FileBlock(summary, i));
     }
