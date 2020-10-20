@@ -76,7 +76,7 @@ To import the corpus into DynamoDB, use the `ImportCollection` util.
 You may first run the command with `-dryrun` option to perform validation and sanity check without writing to DynamoDB. 
 If everything goes well in the dryrun, you can write the document contents to DynamoDB.
 
-```
+```bash
 $ cd /path/to/anlessini
 $ export DYNAMO_TABLE=$(aws cloudformation describe-stacks --stack-name cord19 --query "Stacks[0].Outputs[?OutputKey=='DynamoTableName'].OutputValue" --output text)
 $ utils/target/appassembler/bin/ImportCollection \
@@ -87,7 +87,7 @@ $ utils/target/appassembler/bin/ImportCollection \
 
 Now we can try invoking our function:
 
-```
+```bash
 $ export API_URL=$(aws cloudformation describe-stacks --stack-name cord19 --query "Stacks[0].Outputs[?OutputKey=='SearchApiUrl'].OutputValue" --output text)
 $ curl $API_URL\?query\=incubation\&max_docs\=3
 ```
