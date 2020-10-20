@@ -24,9 +24,7 @@ $ ./bin/create-artifact-bucket.sh
 ```
 
 Now let's provision the AWS infrastructure for Anlessini.
-
 We recommend that you spin up individual CloudFormation stack for each of the collection, as they are logically isolated.
-
 The following is am example of Anlessini serving [COVID-19 Open Research Dataset](https://github.com/castorini/anserini/blob/master/docs/experiments-cord19.md).
 
 ```bash
@@ -39,8 +37,6 @@ $ sam deploy --template-file cloudformation/cord19.yaml $(cat artifact-bucket.tx
 Now we have our infrastructure up, we can populate S3 with our index files, and import the corpus into DynamoDB.
 
 We will be using [Anserini](https://github.com/castorini/anserini) to index our corpus, so please refer to the [documentation](https://github.com/castorini/anserini/tree/master/docs) for your specific corpus. 
-
-The following takes the [COVID-19 Open Research Dataset](https://github.com/castorini/anserini/blob/master/docs/experiments-cord19.md) for example.
 
 First, download and extract the corpus.
 
