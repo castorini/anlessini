@@ -39,7 +39,7 @@ Resources:
           ThrottlingRateLimit: 2
 
   SearchLambdaFunction:
-    Type: AWS::Serverless::Function
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
       CodeUri: search-lambda-function/target/search-lambda-function-0.1.0-SNAPSHOT-fatjar.jar
       Handler: io.anlessini.SearchLambda::handleRequest
