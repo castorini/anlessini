@@ -8,12 +8,16 @@ import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.anlessini.store.S3BlockCache;
 import io.anlessini.store.S3Directory;
+import io.anlessini.store.S3IndexInput;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.lucene.analysis.Analyzer;
@@ -28,6 +32,7 @@ import org.apache.lucene.search.similarities.BM25Similarity;
 import org.apache.lucene.search.similarities.Similarity;
 
 import java.io.*;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
 
@@ -43,11 +48,14 @@ public class SearchLambda implements RequestHandler<APIGatewayProxyRequestEvent,
   private final String DYNAMODB_TABLE_NAME = System.getenv("TABLE_NAME");
   private final Table dynamoTable;
 
+  private final AmazonS3 s3Client;
+
   private static final ObjectMapper objectMapper = new ObjectMapper();
   private static final ObjectWriter writer = objectMapper.writer();
 
   public SearchLambda() throws IOException {
-    directory = new S3Directory(S3_INDEX_BUCKET, S3_INDEX_KEY);
+    s3Client = AmazonS3ClientBuilder.defaultClient();
+    directory = new S3Directory(s3Client, S3_INDEX_BUCKET, S3_INDEX_KEY);
     reader = DirectoryReader.open(directory);
 
     // initializing the dynamodb instance
@@ -103,6 +111,10 @@ public class SearchLambda implements RequestHandler<APIGatewayProxyRequestEvent,
       String docid = doc.getField("id").stringValue();
       docids[i] = docid;
     }
+
+    LOG.info("Docids: " + Arrays.toString(docids));
+    S3BlockCache.getInstance().logStats(Boolean.parseBoolean(System.getenv("CLEAR_CACHE_STATS")));
+    S3IndexInput.logStats(Boolean.parseBoolean(System.getenv("CLEAR_CACHE_STATS")));
 
     ObjectNode rootNode = objectMapper.createObjectNode();
     rootNode.put("query_id", UUID.randomUUID().toString());

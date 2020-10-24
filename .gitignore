@@ -8,3 +8,5 @@ acl/
 target/
 .aws-sam/
 samconfig.toml
+
+output-template.yaml
