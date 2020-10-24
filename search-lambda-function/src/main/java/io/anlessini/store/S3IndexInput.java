@@ -167,4 +167,13 @@ public class S3IndexInput extends BufferedIndexInput {
       throw new EOFException("read past EOF: pos=" + pos + ", length=" + length() + ": " + toString() + "@" + hashCode());
     }
   }
+
+  public static void logStats(boolean clearStats) {
+    LOG.trace("Total bytes read from S3: " + stats.readFromS3.get()
+        + ", total bytes read: " + stats.readTotal.get());
+    if (clearStats) {
+      stats.readTotal.set(0);
+      stats.readFromS3.set(0);
+    }
+  }
 }

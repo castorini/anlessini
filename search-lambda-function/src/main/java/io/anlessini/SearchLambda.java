@@ -113,13 +113,8 @@ public class SearchLambda implements RequestHandler<APIGatewayProxyRequestEvent,
     }
 
     LOG.info("Docids: " + Arrays.toString(docids));
-    S3BlockCache.getInstance().logStats(System.getenv("CLEAR_CACHE_STATS").equals("TRUE"));
-    LOG.info("Total bytes read from S3: " + S3IndexInput.stats.readFromS3.get()
-        + ", total bytes read: " + S3IndexInput.stats.readTotal.get());
-    if (System.getenv("CLEAR_CACHE_STATS").equals("TRUE")) {
-      S3IndexInput.stats.readTotal.set(0);
-      S3IndexInput.stats.readFromS3.set(0);
-    }
+    S3BlockCache.getInstance().logStats(Boolean.parseBoolean(System.getenv("CLEAR_CACHE_STATS")));
+    S3IndexInput.logStats(Boolean.parseBoolean(System.getenv("CLEAR_CACHE_STATS")));
 
     ObjectNode rootNode = objectMapper.createObjectNode();
     rootNode.put("query_id", UUID.randomUUID().toString());
@@ -127,8 +122,8 @@ public class SearchLambda implements RequestHandler<APIGatewayProxyRequestEvent,
 
     for (int i = 0; i < topDocs.scoreDocs.length; i++) {
       // retreiving from dynamodb
-//      Item item = dynamoTable.getItem("id", docids[i]);
-//      response.add(item.toJSON());
+      Item item = dynamoTable.getItem("id", docids[i]);
+      response.add(item.toJSON());
     }
     rootNode.set("response", response);
     // System.out.println(mapper.writeValueAsString(rootNode));
