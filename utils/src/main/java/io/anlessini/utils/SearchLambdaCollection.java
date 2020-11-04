@@ -124,13 +124,15 @@ public class SearchLambdaCollection<K> {
             .withPayload(gson.toJson(request));
 
         InvokeResult invokeResult = lambda.invoke(invokeRequest);
-        SearchResponse response = gson.fromJson(new InputStreamReader(new ByteBufferInputStream(invokeResult.getPayload())), SearchResponse.class);
+        String payload = StandardCharsets.UTF_8.decode(invokeResult.getPayload().asReadOnlyBuffer()).toString();
 
-        if (invokeResult.getStatusCode() != 200 || response == null || response.hits == null) {
+        if (invokeResult.getStatusCode() != 200 || invokeResult.getFunctionError() != null) {
           String logMessage = invokeResult.getLogResult() != null ? new String(Base64.getDecoder().decode(invokeResult.getLogResult())) : "";
-          LOG.error("Invocation " + request + " received code " + invokeResult.getStatusCode() +
-              ", error: " + invokeResult.getFunctionError() + "\n " + logMessage);
+          throw new RuntimeException("Invocation " + request + " failed with code=" + invokeResult.getStatusCode() +
+              "\nerror=" + invokeResult.getFunctionError() + "\npayload=" + payload + "\nlogMessage=" + logMessage);
         }
+
+        SearchResponse response = gson.fromJson(payload, SearchResponse.class);
 
         Set<String> docids = new HashSet<>();
         int rank = 1;
