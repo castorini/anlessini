@@ -62,7 +62,7 @@ public class SearchLambda implements RequestHandler<SearchRequest, SearchRespons
       }
       SearchResponse response = new SearchResponse(hits);
 
-      LOG.info("Response: " + response);
+      LOG.trace("Response: " + response);
       long endTime = System.currentTimeMillis();
       LOG.info("Query latency: " + (endTime - startTime) + " ms");
 
