@@ -8,11 +8,8 @@ public class SearchRequest implements Serializable, Cloneable {
   static final Float DEFAULT_BM25_B = 0.4f;
 
   private String query;
-
   private Integer maxDocs;
-
   private Float bm25k1;
-
   private Float bm25b;
 
   public SearchRequest() {
