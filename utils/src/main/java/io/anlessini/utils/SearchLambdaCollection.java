@@ -9,15 +9,15 @@ import com.google.gson.Gson;
 import io.anlessini.SearchRequest;
 import io.anlessini.SearchResponse;
 import io.anserini.search.topicreader.TopicReader;
+import org.apache.commons.io.output.NullWriter;
 import org.apache.commons.lang3.time.DurationFormatUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.apache.zookeeper.server.ByteBufferInputStream;
 import org.kohsuke.args4j.*;
 import org.kohsuke.args4j.spi.StringArrayOptionHandler;
 
+import java.io.Closeable;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -27,9 +27,9 @@ import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
-public class SearchLambdaCollection<K> {
+public class SearchLambdaCollection<K> implements Closeable {
   private static final Logger LOG = LogManager.getLogger(SearchLambdaCollection.class);
 
   public static class Args {
@@ -79,12 +79,15 @@ public class SearchLambdaCollection<K> {
   private final AWSLambda lambda; // thread-safe AWS lambda client
   private final SortedMap<K, Map<String, String>> topics;
   private final Gson gson = new Gson();
+  private final AtomicLong processedQueries = new AtomicLong();
+  private final PrintWriter out;
 
   @SuppressWarnings("unchecked")
-  public SearchLambdaCollection(Args args) {
+  public SearchLambdaCollection(Args args) throws IOException {
     this.args = args;
     this.lambda = AWSLambdaClientBuilder.defaultClient();
     this.topics = new TreeMap<>();
+    this.out = new PrintWriter(Files.newBufferedWriter(Paths.get(args.output), StandardCharsets.US_ASCII));
 
     for (String topicsFile : args.topics) {
       Path path = Paths.get(topicsFile);
@@ -101,19 +104,17 @@ public class SearchLambdaCollection<K> {
     }
   }
 
-  public void runTopics() throws IOException {
+  public void runTopics() {
     final long start = System.nanoTime();
-    final AtomicInteger count = new AtomicInteger();
-    PrintWriter out = new PrintWriter(Files.newBufferedWriter(Paths.get(args.output), StandardCharsets.US_ASCII));
     final ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(args.threads);
 
-    for (final Map.Entry<K, Map<String, String>> topicEntry : topics.entrySet()) {
+    for (Map.Entry<K, Map<String, String>> topicEntry : topics.entrySet()) {
+      final K qid = topicEntry.getKey();
+      final Map<String, String> fieldValues = topicEntry.getValue();
       executor.execute(() -> {
-        K qid = topicEntry.getKey();
-
         StringBuilder sb = new StringBuilder();
         for (String field : args.topicFields) {
-          sb.append(" ").append(topicEntry.getValue().get(field.trim()));
+          sb.append(" ").append(fieldValues.get(field.trim()));
         }
         String queryString = sb.toString();
 
@@ -157,7 +158,7 @@ public class SearchLambdaCollection<K> {
           rank++;
         }
         out.println(buf.toString());
-        int processed = count.incrementAndGet();
+        long processed = processedQueries.incrementAndGet();
         if (processed % args.reportInterval == 0) {
           LOG.info(String.format("%d queries processed", processed));
         }
@@ -169,7 +170,7 @@ public class SearchLambdaCollection<K> {
     try {
       // Wait for existing tasks to terminate
       while (!executor.awaitTermination(1, TimeUnit.MINUTES)) {
-        LOG.info(String.format("%d queries processed", count.incrementAndGet()));
+        LOG.info(String.format("%d queries processed", processedQueries.get()));
       }
     } catch (InterruptedException ie) {
       // (Re-)Cancel if current thread also interrupted
@@ -179,9 +180,13 @@ public class SearchLambdaCollection<K> {
     }
 
     out.flush();
-    out.close();
     final long durationMillis = TimeUnit.MILLISECONDS.convert(System.nanoTime() - start, TimeUnit.NANOSECONDS);
-    LOG.info(count.get() + " topics processed in " + DurationFormatUtils.formatDuration(durationMillis, "HH:mm:ss"));
+    LOG.info(processedQueries.get() + " topics processed in " + DurationFormatUtils.formatDuration(durationMillis, "HH:mm:ss"));
+  }
+
+  @Override
+  public void close() {
+    out.close();
   }
 
   public static void main(String[] args) throws Exception {
@@ -200,6 +205,7 @@ public class SearchLambdaCollection<K> {
     final long start = System.nanoTime();
     SearchLambdaCollection searcher = new SearchLambdaCollection(searchArgs);
     searcher.runTopics();
+    searcher.close();
     final long durationMillis = TimeUnit.MILLISECONDS.convert(System.nanoTime() - start, TimeUnit.NANOSECONDS);
     LOG.info("Total run time: " + DurationFormatUtils.formatDuration(durationMillis, "HH:mm:ss"));
   }
