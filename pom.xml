@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>io.anlessini</groupId>
   <artifactId>anlessini</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>${revision}</version>
   <name>Anlessini</name>
   <description>Serverless Anserini</description>
   <url>http://anserini.io/</url>
@@ -32,6 +32,7 @@
   </developers>
 
   <properties>
+    <revision>0.1.0-SNAPSHOT</revision>
     <lucene.version>8.3.0</lucene.version>
     <amazon.aws.sdk.version>1.11.848</amazon.aws.sdk.version>
     <anserini.version>0.9.4</anserini.version>
@@ -144,11 +145,6 @@
       <groupId>com.amazonaws</groupId>
       <artifactId>aws-lambda-java-core</artifactId>
       <version>1.2.1</version>
-    </dependency>
-    <dependency>
-      <groupId>com.amazonaws</groupId>
-      <artifactId>aws-lambda-java-events</artifactId>
-      <version>3.1.0</version>
     </dependency>
     <dependency>
       <groupId>org.apache.lucene</groupId>
