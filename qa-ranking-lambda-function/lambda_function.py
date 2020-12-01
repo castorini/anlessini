@@ -72,6 +72,11 @@ def _batch_get_documents(hits, table=DYNAMODB_TABLE, max_retries=3):
 
 
 def get_documents(hits):
+    """
+    Obtain the document contents from DynamoDB as dicts
+    :param hits: list of dicts, {docid: str, score: float, doc: int}
+    :return: list of dicts, whose structure depends on the DynamoDB table schema, e.g., {"id": ..., "contents": ...}
+    """
     documents = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=DYNAMODB_CONCURRENCY) as executor:
         hit_batches = [hits[i:i+100] for i in range(0, len(hits), 100)]
