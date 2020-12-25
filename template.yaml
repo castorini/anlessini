@@ -8,7 +8,7 @@ Description: >
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
-    Timeout: 30
+    Timeout: 150
 
 Resources:
   AnlessiniApi:
@@ -31,13 +31,28 @@ Resources:
       Policies:
         - S3ReadPolicy:
             BucketName: '*'
-        - DynamoDBCrudPolicy:
-            TableName: '*'
       Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
         Variables:
-          INDEX_BUCKET: acl-lucene-index
-          INDEX_KEY: acl
-          TABLE_NAME: ACL
+          INDEX_BUCKET: anlessini-stack-anlessiniindexbucket-16lvwshfbz16t
+          INDEX_KEY: msmarco-passage
+
+  QARankingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: qa-ranking-lambda-function/.
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.8
+      MemorySize: 2048
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref SearchLambdaFunction
+        - DynamoDBCrudPolicy:
+            TableName: '*'
+      Environment:
+        Variables:
+          SEARCH_LAMBDA: !Ref SearchLambdaFunction
+          DYNAMODB_TABLE: msmarco-passage
+          DYNAMODB_CONCURRENCY: 8
       Events:
         AnlessiniSearch:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
