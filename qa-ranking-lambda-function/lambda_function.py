@@ -55,7 +55,8 @@ def _get_dynamo_client():
 def _batch_get_documents(hits, table=DYNAMODB_TABLE, max_retries=3):
     retries = 0
     results = []
-    unprocessed_keys = [{"id": hit["docid"]} for hit in hits]
+    docids = {hit["docid"] for hit in hits}
+    unprocessed_keys = [{"id": docid} for docid in docids]
     while unprocessed_keys:
         try:
             batch_get_response = _get_dynamo_client().batch_get_item(
@@ -87,7 +88,7 @@ def get_documents(hits):
 
 def lambda_handler(event, context):
     query = event["queryStringParameters"]["query"]
-    max_docs = event["queryStringParameters"]["max_docs"]
+    max_docs = event["queryStringParameters"].get("max_docs")
 
     hits = invoke_search_lambda(query, max_docs)
     documents = get_documents(hits)
