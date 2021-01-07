@@ -11,9 +11,26 @@ Globals:
     Timeout: 150
 
 Resources:
-  AnlessiniApi:
+  IndexS3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+
+  DynamoTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "anlessini-${AWS::StackName}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: "id"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "id"
+          KeyType: "HASH"
+
+  SearchApi:
     Type: AWS::Serverless::Api
     Properties:
+      Name: !Sub "anlessini-${AWS::StackName}-search"
       StageName: Prod
       MethodSettings:
         - ResourcePath: /search
@@ -30,11 +47,11 @@ Resources:
       MemorySize: 3008
       Policies:
         - S3ReadPolicy:
-            BucketName: '*'
+            BucketName: !Ref 'IndexS3Bucket'
       Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
         Variables:
-          INDEX_BUCKET: anlessini-stack-anlessiniindexbucket-16lvwshfbz16t
-          INDEX_KEY: msmarco-passage
+          INDEX_BUCKET: !Ref 'IndexS3Bucket'
+          INDEX_KEY: !Ref 'AWS::StackName'
 
   QARankingFunction:
     Type: AWS::Serverless::Function
@@ -47,27 +64,33 @@ Resources:
         - LambdaInvokePolicy:
             FunctionName: !Ref SearchLambdaFunction
         - DynamoDBCrudPolicy:
-            TableName: '*'
+            TableName: !Ref 'DynamoTable'
       Environment:
         Variables:
           SEARCH_LAMBDA: !Ref SearchLambdaFunction
-          DYNAMODB_TABLE: msmarco-passage
+          DYNAMODB_TABLE: !Ref 'DynamoTable'
           DYNAMODB_CONCURRENCY: 8
       Events:
         AnlessiniSearch:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
-            RestApiId: !Ref AnlessiniApi
+            RestApiId: !Ref 'SearchApi'
             Path: /search
             Method: get
 
 Outputs:
+  IndexBucketName:
+    Description: "Name of S3 bucket to hold the index files"
+    Value: !Ref 'IndexS3Bucket'
+  DynamoTableName:
+    Description: "Name of DynamoDB table to hold the document fields"
+    Value: !Ref 'DynamoTable'
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
   # Find out more about other implicit resources you can reference within SAM
   # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
-  AnlessiniApiUrl:
+  SearchApiUrl:
     Description: "API Gateway endpoint URL for Prod stage for search lambda function"
-    Value: !Sub "https://${AnlessiniApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/search/"
+    Value: !Sub "https://${SearchApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/search/"
   SearchLambdaFunction:
     Description: "Lambda Function ARN"
     Value: !GetAtt SearchLambdaFunction.Arn

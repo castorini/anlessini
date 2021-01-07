@@ -9,4 +9,8 @@ target/
 .aws-sam/
 samconfig.toml
 
-output-template.yaml
+# the name of the S3 bucket that store the Anlessini artifacts
+artifact-bucket.txt
+
+# default directory where CloudFormation output template goes to
+cloudformation/
