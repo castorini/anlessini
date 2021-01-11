@@ -168,12 +168,13 @@ public class S3IndexInput extends BufferedIndexInput {
     }
   }
 
-  public static void logStats(boolean clearStats) {
+  public static void logStats() {
     LOG.trace("Total bytes read from S3: " + stats.readFromS3.get()
         + ", total bytes read: " + stats.readTotal.get());
-    if (clearStats) {
-      stats.readTotal.set(0);
-      stats.readFromS3.set(0);
-    }
+  }
+
+  public static void clearStats() {
+    stats.readTotal.set(0);
+    stats.readFromS3.set(0);
   }
 }
