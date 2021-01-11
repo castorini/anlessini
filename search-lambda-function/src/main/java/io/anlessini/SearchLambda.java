@@ -66,8 +66,12 @@ public class SearchLambda implements RequestHandler<SearchRequest, SearchRespons
       long endTime = System.currentTimeMillis();
       LOG.info("Query latency: " + (endTime - startTime) + " ms");
 
-      S3BlockCache.getInstance().logStats(Boolean.parseBoolean(System.getenv("CLEAR_CACHE_STATS")));
-      S3IndexInput.logStats(Boolean.parseBoolean(System.getenv("CLEAR_CACHE_STATS")));
+      S3BlockCache.getInstance().logStats();
+      S3IndexInput.logStats();
+      if (Boolean.parseBoolean(System.getenv("CLEAR_CACHE_STATS"))) {
+        S3BlockCache.getInstance().clearStats();
+        S3IndexInput.clearStats();
+      }
 
       return response;
     } catch (IOException ioe) {

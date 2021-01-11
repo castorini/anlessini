@@ -1,6 +1,5 @@
 package io.anlessini.store;
 
-import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.AtomicLongMap;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -131,7 +130,9 @@ public class S3BlockCache {
     return cb.data;
   }
 
-  public void logStats(boolean clearStats) {
+  public void logStats() {
+    if (!LOG.isTraceEnabled()) return;
+
     Set<String> fileKeys = new HashSet<>();
     fileKeys.addAll(hitCount.asMap().keySet());
     fileKeys.addAll(missCount.asMap().keySet());
@@ -143,12 +144,12 @@ public class S3BlockCache {
       LOG.trace(String.format("%-20s %,10d %,10d %,10d", key, hitCount.get(key), missCount.get(key), evictCount.get(key)));
     });
     LOG.trace("Total cache size=" + size.get() + ", elements=" + elements.get());
+  }
 
-    if (clearStats) {
-      hitCount.putAll(Maps.transformValues(hitCount.asMap(), input -> 0L));
-      missCount.putAll(Maps.transformValues(missCount.asMap(), input -> 0L));
-      evictCount.putAll(Maps.transformValues(evictCount.asMap(), input -> 0L));
-    }
+  public void clearStats() {
+    hitCount.clear();
+    missCount.clear();
+    evictCount.clear();
   }
 
   public static class CacheBlob {
