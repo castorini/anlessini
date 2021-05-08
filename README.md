@@ -25,7 +25,7 @@ $ ./bin/create-artifact-bucket.sh
 
 Now let's provision the AWS infrastructure for Anlessini.
 We recommend that you spin up individual CloudFormation stack for each of the collection, as they are logically isolated.
-The following is am example of Anlessini serving [COVID-19 Open Research Dataset](https://github.com/castorini/anserini/blob/master/docs/experiments-cord19.md).
+The following is an example of Anlessini serving [COVID-19 Open Research Dataset](https://github.com/castorini/anserini/blob/master/docs/experiments-cord19.md).
 
 ```bash
 # package the artifact and upload to S3
