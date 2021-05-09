@@ -16,6 +16,8 @@ First let's build the project.
 $ mvn clean install
 ```
 
+Note: If you receive an error regarding Docker TestContainers failing to load or using incorrect Docker version, run `docker system prune -af` to clean up all docker related content (images etc.) and run the above command again.
+
 Anlessini uses AWS SAM/Cloudformation for describing the infrastructure.
 So let's create a S3 bucket for storing the artifacts.
 
