@@ -16,6 +16,8 @@ First let's build the project.
 $ mvn clean install
 ```
 
+Note: If you receive an error regarding Docker TestContainers failing to load or using incorrect Docker version, run `docker system prune -af` to clean up all docker related content (images etc.) and run the above command again.
+
 Anlessini uses AWS SAM/Cloudformation for describing the infrastructure.
 So let's create a S3 bucket for storing the artifacts.
 
@@ -25,7 +27,7 @@ $ ./bin/create-artifact-bucket.sh
 
 Now let's provision the AWS infrastructure for Anlessini.
 We recommend that you spin up individual CloudFormation stack for each of the collection, as they are logically isolated.
-The following is am example of Anlessini serving [COVID-19 Open Research Dataset](https://github.com/castorini/anserini/blob/master/docs/experiments-cord19.md).
+The following is an example of Anlessini serving [COVID-19 Open Research Dataset](https://github.com/castorini/anserini/blob/master/docs/experiments-cord19.md).
 
 ```bash
 # package the artifact and upload to S3
